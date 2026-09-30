@@ -76,7 +76,8 @@ namespace SignLabels
         /// <summary>
         /// Same as <see cref="TryConsume(int, int, float)"/>, plus how many seconds elapsed between
         /// <see cref="Observe"/> recording the placement and this call consuming it — 0 when nothing
-        /// was consumed. This is what the mod's "default … applied … after N s" log line reports.
+        /// was consumed. The mod uses it to reconstruct the placement time that its
+        /// "default … sent … after N s" log line measures from.
         /// </summary>
         public bool TryConsume(int tileX, int tileZ, float now, out float elapsedSeconds)
         {

@@ -54,11 +54,11 @@ Two layers, neither wired into the build:
   result. Read it before an in-game check, and record a new run's result
   there rather than only in a commit message.
 
-Every line the mod logs starts with `[SignLabels]`:
-`grep SignLabels Player.log`. `docs/manual-tests.md`'s "Reading the log"
-section explains each one, including which are a healthy warning (a failed
-prefab edit just leaves that one sign vanilla; the game still loads) versus
-what should never appear.
+Every line the mod logs starts with `[SignLabels]`: `grep SignLabels
+Player.log`. `docs/manual-tests.md`'s "Reading the log" section explains each
+one, including which are a healthy warning (a failed prefab edit just leaves
+that prefab's signs without interaction; the game still loads) versus what
+should never appear.
 
 ## Architecture
 

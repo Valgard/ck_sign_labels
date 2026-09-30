@@ -29,36 +29,44 @@ once:
   loading a second world without restarting the game converts again but
   prints none of the five.
 
-Placing a sign adds up to two more lines, once per placement rather than once
-per session:
+Placing a sign adds a few more lines, once per placement rather than once per
+session:
 
 - `placement at (<x>,<z>)` — the local player's own placement, read from
   their replicated `PlacementCD`.
 - Then at most one of these three for the same tile:
-  - `default <state> applied at (<x>,<z>) after <seconds> s` — the configured
+  - `default <state> sent at (<x>,<z>) after <seconds> s` — the configured
     default was sent for the sign that spawned there. `<state>` is the
     `Default visibility` option as it read when the sign spawned, `<seconds>`
     the time from the placement to the send, to two decimals. The send waits
     for the server to confirm the sign (see *Default visibility* below), so
-    this trails the spawn slightly.
+    this trails the spawn slightly. The line says the request went out, not
+    that the server applied it.
   - `default skipped at (<x>,<z>): set in the sign window` — the player had
     the sign's window open and had already moved its toggle off Hover when
     the default was due, so their choice stands and nothing is sent.
   - `default not applied at (<x>,<z>): not confirmed by the server within 5 s`
     — the server never confirmed the sign within 5 seconds, so nothing was
     sent. Not expected in a healthy session.
+- After a `sent` line, possibly `default <state> at (<x>,<z>) not confirmed by
+  the server within 2 s` — the new state did not come back from the server
+  within two seconds of the send, so the mod stopped watching for it. The send
+  itself is not undone; check the sign's state in its window. Not expected in a
+  healthy session.
 
-  None of them appears when the option is Hover (a new sign already starts
-  there), when no `LabeledSign` spawns on that tile within the matching window,
-  or when the sign despawns or its state changes from Hover before the send —
-  someone already chose, which is not a failure.
+  None of the three `default` lines above appears when the option is Hover (a new sign already
+  starts there), when no `LabeledSign` spawns on that tile within the matching
+  window, or when the sign despawns or its state changes from Hover before the
+  send — someone already chose, which is not a failure.
 
-Anything else is a warning or an error. Each is logged once per session, never
-per frame:
+Anything else is a warning or an error, and none of it is logged per frame. Most
+lines appear at most once per session; the ones marked *per placement* can
+repeat, once for each sign they concern.
 
-- `failed to edit <RootName> prefab (<failure>); ids <ids> stay vanilla` —
-  those signs cannot be labelled, and the game still loads. `<failure>` names
-  the step that failed:
+- `failed to edit <RootName> prefab (<failure>); ids <ids> get no interaction
+  triggers` — once per prefab. Those signs cannot be labelled, and the game
+  still loads. `<failure>` names the step that failed; for all but the last two
+  the prefab was not touched and the signs stay vanilla:
   - `the object has no graphical prefab` — the target's `PrefabInfo` returned
     none.
   - `the text sign's graphical prefab is not available` — `SignText`'s own
@@ -74,25 +82,50 @@ per frame:
     sign an interaction of its own; the mod stays out of its way.
   - `the prefab has no SpriteObject to outline` — the sign's sprite is no
     longer a `Pug.Sprite.SpriteObject`.
-  - `the edit threw <exception>` — an edit step raised an exception; the text
-    names it.
+  - `the edit threw <exception>; the prefab may be partly edited` — an edit
+    step raised an exception; the text names it. The root may already be a
+    `LabeledSign`.
   - `the edit did not leave exactly one LabeledSign and one InteractableObject
-    on the root` — the edit ran without an exception but its result is not the
-    expected one.
+    on the root; the prefab is partly edited` — the edit ran without an
+    exception but its result is not the expected one.
+- `<RootName> conversion threw (<exception>); <name> (<id>) gets no interaction
+  triggers` — once per distinct exception. Something around the prefab edit
+  threw outside the edit's own guard; the game still loads.
+- `adding interaction triggers for <name> (<id>) threw (<exception>); it may not
+  be interactable` — once per distinct exception. The prefab edit succeeded,
+  but some of the trigger components are missing from that sign's entity.
 - `LabeledSign <name> has no InteractableObject to move; it cannot be
   interacted with` — an instance of an edited prefab lost its interaction point
   before `Awake`.
 - `LabeledSign <name> has no text object source; its label cannot show` — an
   instance woke before any prefab edit ran, or the text sign's `WorldText` had
   no `ObjectNameTag`.
+- `LabeledSign <name> threw while <step> (<exception>); <consequence> (logged
+  once per session)` — `<step>` is moving its InteractableObject to a child,
+  attaching its text object, or wiring its interaction. The game's own
+  initialisation of the sign still ran; only that part of the mod's is missing.
 - `AnySpawned handler threw` — followed by the exception; a subscriber to
   `LabeledSign.AnySpawned` failed. The sign itself spawned normally.
+- `Init threw (<exception>); the defaultVisibility option is unavailable and new
+  signs start at Hover` — building the Mod Settings Menu option failed. The
+  labels are unaffected.
 - `DefaultVisibility.Bind received a null handle; defaultVisibility stays at
   Hover and ignores the menu.` — Mod Settings Menu failed to build the
   Choice; the default stays at the vanilla Hover and the menu option has no
   effect.
 - `DefaultVisibility.Bind called more than once — the later handle wins.` —
   a warning, not expected in a normal load; `Init` should call `Bind` once.
+- `placement watch threw (<exception>); pending defaults were dropped, and new
+  signs may not get the default visibility (logged once per session)` — the
+  per-frame watch failed outside its per-sign guards. It keeps running every
+  frame, so a one-off failure costs only the signs that were waiting; a
+  persistent one means the default stops working for the rest of the session,
+  with this single line as the only trace.
+- `default send at (<x>,<z>) threw (<exception>); dropped` — *per placement*.
+  Sending the default for that sign failed; it stays at Hover.
+- `echo watch threw (<exception>); dropped a pending window refresh` — *per
+  placement*. Watching for the server's answer failed; a sign window opened
+  in that gap may keep showing Hover until it is reopened.
 
 ## Labelled signs
 
@@ -148,27 +181,31 @@ then Always in turn:
 - Place a new arrow: its label state matches the option shortly after
   placing it, without touching the sign's own toggle in its window.
   `Player.log` shows a `placement at` line for the placement, followed by a
-  `default … applied` line naming the same tile and the matching state —
-  except at Hover, where no `default … applied` line appears, since a
+  `default … sent` line naming the same tile and the matching state —
+  except at Hover, where no `default … sent` line appears, since a
   freshly placed sign already starts there.
 - A sign loaded from a save keeps its stored state regardless of the current
-  option, with no `placement at` or `default … applied` line for it.
+  option, with no `placement at` or `default … sent` line for it.
 - A sign streamed in by walking into its chunk keeps its state the same way.
 - Mine a sign and place a new one on the same tile right away: the new one gets
-  the current default too, with its own `placement at` / `default … applied`
+  the current default too, with its own `placement at` / `default … sent`
   pair.
 
 With the option at Off or Always, the sign window's toggle against the default:
 
 - Place an arrow and open its window immediately: the toggle may show Hover when
   the window opens, then switches to the default on its own a moment later,
-  without closing and reopening the window; the log shows a `default … applied`
+  without closing and reopening the window; the log shows a `default … sent`
   line.
 - Place an arrow, open its window immediately and change the toggle before it
   switches: your choice is kept, and the log shows `default skipped at …: set
-  in the sign window` instead of an applied line.
+  in the sign window` instead of a `sent` line.
 - Place an arrow, open its window immediately and type a text: the default
   still applies — text is not a visibility choice.
+- Place an arrow, open its window, close it and reopen it right away, so the
+  reopening falls between the send and the server's answer: the reopened
+  window may show Hover, then switches to the default on its own, and the log
+  shows no `not confirmed by the server within 2 s` line.
 
 **A newly placed sign is a client-predicted spawn, and the default waits for the
 server to confirm it.** The sign's entity carries no real ghost id yet
@@ -191,7 +228,7 @@ toggle off Hover.
 9999984):** the gap between placement and send was 0.12–0.18 s across ten
 placements. Always ended at state 2 and Off at state 0 when checked a second
 later. Signs loaded from the save kept their stored state, with no `placement
-at` line at load. Not run: confirming no `default … applied` line at Hover
+at` line at load. Not run: confirming no `default … sent` line at Hover
 (the ten placements covered Off and Always only), a sign streamed in by
 walking into its chunk, and mining a sign and placing a new one on the same
 tile right away.
@@ -201,6 +238,9 @@ tile right away.
 - Open the window immediately: PASS — the toggle switched to Always on its own
   a moment later, without reopening.
 - Open immediately and type a text: PASS — the sign ended at Always.
+- Window closed and reopened between the send and the server's answer: not run
+  — added after this run, and like the next case the gap is short enough that
+  hitting it by hand is uncertain.
 - Open immediately and change the toggle before it switches: not run — the
   gap of about 0.15 s is too short to click in, so this is not reproducible by
   hand. That the code keeps a toggle already changed in the window is reviewed
@@ -222,9 +262,9 @@ Against a dedicated server with the mod installed on both sides:
 - With a second client: the default applies only to signs the placing player
   placed, and the other player sees the labels and states.
 
-Over a server the client's `default … applied` line trails the placement by
+Over a server the client's `default … sent` line trails the placement by
 more than in singleplayer, since the confirmation is a network round trip. A
-`placement at` line with no `applied` line after it comes from placing
+`placement at` line with no `sent` line after it comes from placing
 something other than a sign — the placement record changes for any placed
 object — and is expected.
 
@@ -236,8 +276,9 @@ CrossOver bottle, world "Test", one client, dev build 9999984):**
 - Joining, labelling and toggling, default Always on new signs including the
   open window's toggle, mining a sign at Always (one item), painting the Arrow
   Sign, and disconnect plus rejoin: PASS.
-- Client log: `default Always applied … after` 0.31–0.35 s, against
-  0.12–0.18 s in singleplayer.
+- Client log: `default Always applied … after` (the send line's wording at the
+  time; it now reads `sent`) 0.31–0.35 s, against 0.12–0.18 s in
+  singleplayer.
 - Second client: not run yet — open.
 
 More Labels 2.1.1 was loaded (`Successfully compiled NameChests`) during every

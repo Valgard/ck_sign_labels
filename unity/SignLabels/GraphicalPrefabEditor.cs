@@ -27,7 +27,9 @@ namespace SignLabels
         /// <summary>
         /// Edits <paramref name="graphical"/> once; later calls return the cached result for that
         /// prefab. Every precondition is checked before the prefab is touched, so a failure caught
-        /// there leaves it exactly as the game built it. <paramref name="failure"/> is null on success.
+        /// there leaves it exactly as the game built it; a failure during or after the edit itself
+        /// can leave it partly edited, and its failure text says so. <paramref name="failure"/> is
+        /// null on success.
         /// </summary>
         public static bool EnsureEdited(GameObject graphical, SignLabelTarget target, out string failure)
         {
@@ -82,13 +84,13 @@ namespace SignLabels
             }
             catch (System.Exception e)
             {
-                return $"the edit threw {e}";
+                return $"the edit threw {e}; the prefab may be partly edited";
             }
 
             if (graphical.GetComponents<EntityMonoBehaviour>().Length != 1 || !(graphical.GetComponent<EntityMonoBehaviour>() is LabeledSign))
-                return "the edit did not leave exactly one LabeledSign and one InteractableObject on the root";
+                return "the edit did not leave exactly one LabeledSign and one InteractableObject on the root; the prefab is partly edited";
             if (graphical.GetComponents<InteractableObject>().Length != 1)
-                return "the edit did not leave exactly one LabeledSign and one InteractableObject on the root";
+                return "the edit did not leave exactly one LabeledSign and one InteractableObject on the root; the prefab is partly edited";
             return null;
         }
 

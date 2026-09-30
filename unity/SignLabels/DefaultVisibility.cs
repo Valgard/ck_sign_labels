@@ -95,14 +95,18 @@ namespace SignLabels
             public readonly World World;
             public readonly Visibility Value;
             public readonly float ExpiresAt;
+            public readonly int TileX;
+            public readonly int TileZ;
 
-            public AwaitingEcho(LabeledSign sign, Entity entity, World world, Visibility value, float expiresAt)
+            public AwaitingEcho(LabeledSign sign, Entity entity, World world, Visibility value, float expiresAt, int tileX, int tileZ)
             {
                 Sign = sign;
                 Entity = entity;
                 World = world;
                 Value = value;
                 ExpiresAt = expiresAt;
+                TileX = tileX;
+                TileZ = tileZ;
             }
         }
 
@@ -203,8 +207,8 @@ namespace SignLabels
         /// <c>SignTextUI.ShowUI</c> and never reads again; when the sign's state now equals the sent
         /// value and that window is still open on this sign with its toggle untouched (still Hover),
         /// the toggle is set to the sent value. Each entry is dropped once the state has arrived,
-        /// when its sign, entity or world is gone, or silently after
-        /// <see cref="EchoTimeoutSeconds"/>.
+        /// or silently when its sign, entity or world is gone, and with a log line when the state has
+        /// not arrived within <see cref="EchoTimeoutSeconds"/>.
         /// </summary>
         private static void ProcessAwaitingEcho(float now)
         {
@@ -237,7 +241,13 @@ namespace SignLabels
                     }
 
                     if (now >= awaiting.ExpiresAt)
+                    {
+                        string timeoutText = EchoTimeoutSeconds.ToString("F0", CultureInfo.InvariantCulture);
+                        Debug.Log(
+                            $"[SignLabels] default {awaiting.Value} at ({awaiting.TileX},{awaiting.TileZ}) not confirmed by the server within {timeoutText} s"
+                        );
                         _awaitingEcho.RemoveAt(i);
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -318,11 +328,21 @@ namespace SignLabels
                                 window.signStateToggle.SetState((int)pending.Value);
                             // A window opened after this point still reads the old state; the echo
                             // watch refreshes it once the new one arrives.
-                            _awaitingEcho.Add(new AwaitingEcho(pending.Sign, pending.Entity, pending.World, pending.Value, now + EchoTimeoutSeconds));
+                            _awaitingEcho.Add(
+                                new AwaitingEcho(
+                                    pending.Sign,
+                                    pending.Entity,
+                                    pending.World,
+                                    pending.Value,
+                                    now + EchoTimeoutSeconds,
+                                    pending.TileX,
+                                    pending.TileZ
+                                )
+                            );
 
                             float elapsedSeconds = now - pending.PlacementAt;
                             string elapsedText = elapsedSeconds.ToString("F2", CultureInfo.InvariantCulture);
-                            Debug.Log($"[SignLabels] default {pending.Value} applied at ({pending.TileX},{pending.TileZ}) after {elapsedText} s");
+                            Debug.Log($"[SignLabels] default {pending.Value} sent at ({pending.TileX},{pending.TileZ}) after {elapsedText} s");
                             _pendingSends.RemoveAt(i);
                             continue;
                         }
@@ -374,7 +394,7 @@ namespace SignLabels
             Visibility value = _handle.Value;
 
             // elapsedSeconds is (match time - placement time); reconstructing the placement time here
-            // lets the eventual "applied … after N s" line measure from the placement to the SEND,
+            // lets the eventual "sent … after N s" line measure from the placement to the SEND,
             // not merely to this match, since the two can now be seconds apart.
             float placementAt = _lastNow - elapsedSeconds;
             _pendingSends.Add(new PendingSend(sign, sign.entity, sign.world, value, placementAt, _lastNow + PendingSendTimeoutSeconds, sign.TileX, sign.TileZ));

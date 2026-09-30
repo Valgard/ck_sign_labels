@@ -32,32 +32,47 @@ namespace SignLabels
             EnsureHasComponent<AlwaysDropOneCD>();
             EnsureHasBuffer<DescriptionBuffer>();
 
-            // Everything below can throw on a future game update (a resolved-null prefab, a
-            // renamed/removed field JsonUtility no longer finds, ...). Nothing here has thrown on
-            // any build tested, but the promise this converter keeps is "the game must load", so a
-            // throw is caught rather than left to fail ECS initialisation: log once, add no trigger
-            // components, and this sign stays vanilla like any other verified edit failure.
+            // Everything from here to the trigger components can throw on a future game update (a
+            // resolved-null prefab, a renamed/removed field JsonUtility no longer finds, ...). Nothing
+            // has thrown on any build tested, but the promise this converter keeps is "the game must
+            // load", so a throw is caught rather than left to fail ECS initialisation: log once and
+            // add no trigger components. The ids text is built here too, before any trigger
+            // component goes on, so nothing after them can fall into a failure branch.
+            string ids;
             try
             {
                 var graphical = info.prefabInfo?.GetGraphical();
-                if (!GraphicalPrefabEditor.EnsureEdited(graphical, target, out var failure))
+                bool edited = GraphicalPrefabEditor.EnsureEdited(graphical, target, out var failure);
+                ids = IdsOn(graphical, target);
+                if (!edited)
                 {
-                    LogOnce(false, $"[SignLabels] failed to edit {target.RootName} prefab ({failure}); ids {IdsOn(graphical, target)} stay vanilla");
+                    LogOnce(false, $"[SignLabels] failed to edit {target.RootName} prefab ({failure}); ids {ids} get no interaction triggers");
                     return;
                 }
+            }
+            catch (Exception ex)
+            {
+                LogOnce(false, $"[SignLabels] {target.RootName} conversion threw ({ex}); {Describe(target.Id)} gets no interaction triggers");
+                return;
+            }
 
+            try
+            {
                 EnsureHasBuffer<TriggerUseInteractionBuffer>();
                 EnsureHasComponent<LocalUseInteractionTriggerCD>(false);
                 AddComponentData(new LocalUseInteractionTriggerSubIndexCD { subIndex = 0 });
                 EnsureHasBuffer<TriggerExitInteractionBuffer>();
                 EnsureHasComponent<LocalExitInteractionTriggerCD>(false);
-
-                LogOnce(true, $"[SignLabels] edited {target.RootName} prefab for {IdsOn(graphical, target)}");
             }
             catch (Exception ex)
             {
-                LogOnce(false, $"[SignLabels] {target.RootName} conversion threw ({ex}); {Describe(target.Id)} stays vanilla");
+                // The prefab edit did succeed, so InteractablePostConverter has its InteractableObject;
+                // what is missing is some of the trigger components.
+                LogOnce(false, $"[SignLabels] adding interaction triggers for {Describe(target.Id)} threw ({ex}); it may not be interactable");
+                return;
             }
+
+            LogOnce(true, $"[SignLabels] edited {target.RootName} prefab for {ids}");
         }
 
         private static void LogOnce(bool success, string message)
