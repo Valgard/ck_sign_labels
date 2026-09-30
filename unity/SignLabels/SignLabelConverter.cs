@@ -32,27 +32,40 @@ namespace SignLabels
             EnsureHasComponent<AlwaysDropOneCD>();
             EnsureHasBuffer<DescriptionBuffer>();
 
-            // Everything from here to the trigger components can throw on a future game update (a
-            // resolved-null prefab, a renamed/removed field JsonUtility no longer finds, ...). Nothing
-            // has thrown on any build tested, but the promise this converter keeps is "the game must
-            // load", so a throw is caught rather than left to fail ECS initialisation: log once and
-            // add no trigger components. The ids text is built here too, before any trigger
-            // component goes on, so nothing after them can fall into a failure branch.
-            string ids;
+            // The prefab edit can throw on a future game update (a resolved-null prefab, a
+            // renamed/removed field JsonUtility no longer finds, ...). Nothing has thrown on any build
+            // tested, but the promise this converter keeps is "the game must load", so a throw is
+            // caught rather than left to fail ECS initialisation: log once and add no trigger
+            // components. The edit's own result is the only thing that decides the triggers.
+            GameObject graphical;
+            bool edited;
+            string failure;
             try
             {
-                var graphical = info.prefabInfo?.GetGraphical();
-                bool edited = GraphicalPrefabEditor.EnsureEdited(graphical, target, out var failure);
-                ids = IdsOn(graphical, target);
-                if (!edited)
-                {
-                    LogOnce(false, $"[SignLabels] failed to edit {target.RootName} prefab ({failure}); ids {ids} get no interaction triggers");
-                    return;
-                }
+                graphical = info.prefabInfo?.GetGraphical();
+                edited = GraphicalPrefabEditor.EnsureEdited(graphical, target, out failure);
             }
             catch (Exception ex)
             {
                 LogOnce(false, $"[SignLabels] {target.RootName} conversion threw ({ex}); {Describe(target.Id)} gets no interaction triggers");
+                return;
+            }
+
+            // Log text only, so it must never decide anything: a throw here falls back to this
+            // target's own id.
+            string ids;
+            try
+            {
+                ids = IdsOn(graphical, target);
+            }
+            catch (Exception)
+            {
+                ids = Describe(target.Id);
+            }
+
+            if (!edited)
+            {
+                LogOnce(false, $"[SignLabels] failed to edit {target.RootName} prefab ({failure}); ids {ids} get no interaction triggers");
                 return;
             }
 

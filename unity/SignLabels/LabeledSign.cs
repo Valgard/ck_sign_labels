@@ -15,7 +15,7 @@ namespace SignLabels
         private static bool _loggedMissingInteractable;
         private static bool _loggedMissingWorldText;
         private static bool _loggedHandlerException;
-        private static bool _loggedAwakeException;
+        private static readonly DistinctFailureLog AwakeFailures = new("LabeledSign.Awake");
 
         /// <summary>Raised at the end of every spawn, after <see cref="TileX"/> and <see cref="TileZ"/> are set.</summary>
         public static event System.Action<LabeledSign> AnySpawned;
@@ -38,9 +38,9 @@ namespace SignLabels
             // they do: skipping it would leave the game's own initialisation of this pooled instance
             // undone, which is worse than a sign without interaction or label. A failed move clears
             // `interactable` before base.Awake() caches it, so a half-finished move can never leave it
-            // pointing at the root (rule 2 in CLAUDE.md) — null costs only the interaction. Throws
-            // are logged once per session, as the null branches below are: Awake runs for every
-            // pooled instance.
+            // pointing at the root (rule 2 in CLAUDE.md) — null costs only the interaction. Each
+            // distinct throw (per step and failure) is logged once per session, never per instance:
+            // Awake runs for every pooled instance.
             try
             {
                 MoveInteractableToChild();
@@ -78,10 +78,10 @@ namespace SignLabels
 
         private void LogAwakeFailureOnce(string step, string consequence, System.Exception e)
         {
-            if (_loggedAwakeException)
+            // Keyed by step as well as by the failure, so one step failing does not hide another.
+            if (!AwakeFailures.ShouldLog(step, e))
                 return;
-            _loggedAwakeException = true;
-            Debug.LogError($"[SignLabels] LabeledSign {name} threw while {step} ({e}); {consequence} (logged once per session)");
+            Debug.LogError($"[SignLabels] LabeledSign {name} threw while {step} ({e}); {consequence} (each distinct failure logged once per session)");
         }
 
         private void MoveInteractableToChild()

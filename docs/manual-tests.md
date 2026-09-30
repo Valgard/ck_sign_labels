@@ -100,8 +100,9 @@ repeat, once for each sign they concern.
 - `LabeledSign <name> has no text object source; its label cannot show` — an
   instance woke before any prefab edit ran, or the text sign's `WorldText` had
   no `ObjectNameTag`.
-- `LabeledSign <name> threw while <step> (<exception>); <consequence> (logged
-  once per session)` — `<step>` is moving its InteractableObject to a child,
+- `LabeledSign <name> threw while <step> (<exception>); <consequence> (each
+  distinct failure logged once per session)` — once per step and distinct
+  exception, not per sign. `<step>` is moving its InteractableObject to a child,
   attaching its text object, or wiring its interaction. The game's own
   initialisation of the sign still ran; only that part of the mod's is missing.
 - `AnySpawned handler threw` — followed by the exception; a subscriber to
@@ -116,11 +117,15 @@ repeat, once for each sign they concern.
 - `DefaultVisibility.Bind called more than once — the later handle wins.` —
   a warning, not expected in a normal load; `Init` should call `Bind` once.
 - `placement watch threw (<exception>); pending defaults were dropped, and new
-  signs may not get the default visibility (logged once per session)` — the
-  per-frame watch failed outside its per-sign guards. It keeps running every
-  frame, so a one-off failure costs only the signs that were waiting; a
-  persistent one means the default stops working for the rest of the session,
-  with this single line as the only trace.
+  signs may not get the default visibility (each distinct failure logged once
+  per session)` — once per distinct exception. The per-frame watch failed
+  outside its per-sign guards. It keeps running every frame, so a one-off
+  failure costs only the signs that were waiting; a persistent one means the
+  default stops working for the rest of the session, with this line as its only
+  trace.
+- `<source>: further distinct failures suppressed after 8` — `<source>` is
+  `placement watch` or `LabeledSign.Awake`. Once each; after it, new kinds of
+  failure from that source are no longer logged.
 - `default send at (<x>,<z>) threw (<exception>); dropped` — *per placement*.
   Sending the default for that sign failed; it stays at Hover.
 - `echo watch threw (<exception>); dropped a pending window refresh` — *per

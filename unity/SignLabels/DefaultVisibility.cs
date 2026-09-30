@@ -142,8 +142,8 @@ namespace SignLabels
         {
             // The loader logs only the first exception to escape ANY mod's Update, across all mods
             // (one shared latch), so a throw leaving here might never reach the log. Catch it here,
-            // log the first one, and clear the pending lists so a bad entry cannot throw again on
-            // the next frame; the placement watch itself is retried every frame.
+            // log each distinct failure once, and clear the pending lists so a bad entry cannot throw
+            // again on the next frame; the placement watch itself is retried every frame.
             try
             {
                 TickCore(now);
@@ -151,17 +151,14 @@ namespace SignLabels
             catch (Exception ex)
             {
                 ClearPending();
-                if (!_loggedTickException)
-                {
-                    _loggedTickException = true;
+                if (TickFailures.ShouldLog("tick", ex))
                     Debug.LogError(
-                        $"[SignLabels] placement watch threw ({ex}); pending defaults were dropped, and new signs may not get the default visibility (logged once per session)"
+                        $"[SignLabels] placement watch threw ({ex}); pending defaults were dropped, and new signs may not get the default visibility (each distinct failure logged once per session)"
                     );
-                }
             }
         }
 
-        private static bool _loggedTickException;
+        private static readonly DistinctFailureLog TickFailures = new("placement watch");
 
         private static void TickCore(float now)
         {
@@ -398,6 +395,49 @@ namespace SignLabels
             // not merely to this match, since the two can now be seconds apart.
             float placementAt = _lastNow - elapsedSeconds;
             _pendingSends.Add(new PendingSend(sign, sign.entity, sign.world, value, placementAt, _lastNow + PendingSendTimeoutSeconds, sign.TileX, sign.TileZ));
+        }
+    }
+
+    /// <summary>
+    /// Decides which failures to log: each distinct one once per session, keyed by a caller-chosen
+    /// context plus the first line of the exception's <c>ToString()</c> — its type name and
+    /// message, read that way because <c>GetType()</c> is off-limits in the load-time sandbox.
+    /// Capped at <see cref="Capacity"/> distinct keys, so a failure whose message varies cannot
+    /// grow the set without bound; past the cap one final line says further failures are hidden.
+    /// Only ever consulted on an exception path, so its allocation costs a healthy frame nothing.
+    /// </summary>
+    internal sealed class DistinctFailureLog
+    {
+        private const int Capacity = 8;
+
+        private readonly HashSet<string> _seen = new();
+        private readonly string _source;
+        private bool _loggedSuppressed;
+
+        public DistinctFailureLog(string source)
+        {
+            _source = source;
+        }
+
+        public bool ShouldLog(string context, Exception ex)
+        {
+            string text = ex.ToString();
+            int newline = text.IndexOf('\n');
+            string firstLine = (newline < 0 ? text : text.Substring(0, newline)).TrimEnd('\r');
+            string key = context + "|" + firstLine;
+            if (_seen.Contains(key))
+                return false;
+            if (_seen.Count >= Capacity)
+            {
+                if (!_loggedSuppressed)
+                {
+                    _loggedSuppressed = true;
+                    Debug.LogError($"[SignLabels] {_source}: further distinct failures suppressed after {Capacity}");
+                }
+                return false;
+            }
+            _seen.Add(key);
+            return true;
         }
     }
 }
