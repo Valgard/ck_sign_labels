@@ -27,32 +27,29 @@ once:
   for its client world and once for its server world; the line still appears
   only once.
 
-Placing a sign adds two more lines, once per placement rather than once per
-session:
+Placing a sign adds up to two more lines, once per placement rather than once
+per session:
 
 - `placement at (<x>,<z>)` — the local player's own placement, read from
   their replicated `PlacementCD`.
-- `default <state> applied at (<x>,<z>) after <seconds> s` — the configured
-  default was applied to the sign that spawned on that tile. `<state>` is the
-  `Default visibility` option as it read at the moment of the *match* (not
-  whatever it reads at the moment of the send, if it was changed in between),
-  `<seconds>` the time from the `placement at` line above to the moment the
-  RPC was actually sent, to two decimals. **Not the same moment as the
-  spawn**, and can trail it by a perceptible fraction of a second: a freshly
-  placed sign is a client-side *predicted* spawn (no server-confirmed ghost
-  id yet), so the mod holds the RPC until the server confirms the same
-  entity's ghost — see "Default visibility" below. Absent when the option is
-  Hover (a freshly placed sign already starts there), when no `LabeledSign`
-  spawns on that tile within the matching window, or when the sign that
-  spawns there already carries text (a re-placed sign the game recognises as
-  the old one).
-- `default not applied at (<x>,<z>): not confirmed by the server within 5 s`
-  — a matched placement's entity never received a confirmed ghost id inside
-  the 5-second window, so the mod gave up without sending. Not expected in a
-  healthy session — see "Default visibility" below. (A sign that despawns or
-  changes state/text before its ghost is confirmed is dropped from the wait
-  silently, with no line at all — that is the normal "someone else already
-  handled it" case, not a failure.)
+- Then at most one of these three for the same tile:
+  - `default <state> applied at (<x>,<z>) after <seconds> s` — the configured
+    default was sent for the sign that spawned there. `<state>` is the
+    `Default visibility` option as it read when the sign spawned, `<seconds>`
+    the time from the placement to the send, to two decimals. The send waits
+    for the server to confirm the sign (see *Default visibility* below), so
+    this trails the spawn slightly.
+  - `default skipped at (<x>,<z>): set in the sign window` — the player had
+    the sign's window open and had already moved its toggle off Hover when
+    the default was due, so their choice stands and nothing is sent.
+  - `default not applied at (<x>,<z>): not confirmed by the server within 5 s`
+    — the server never confirmed the sign within 5 seconds, so nothing was
+    sent. Not expected in a healthy session.
+
+  None of them appears when the option is Hover (a new sign already starts
+  there), when no `LabeledSign` spawns on that tile within the matching window,
+  or when the sign despawns or its state changes from Hover before the send —
+  someone already chose, which is not a failure.
 
 Anything else is a warning or an error. Each is logged once per session, never
 per frame:
@@ -153,16 +150,29 @@ then Always in turn:
   the current default too, with its own `placement at` / `default … applied`
   pair.
 
+With the option at Off or Always, the sign window's toggle against the default:
+
+- Place an arrow and open its window immediately: the toggle may show Hover for
+  a moment, then switches to the default once the server confirms the sign,
+  followed by a `default … applied` line.
+- Place an arrow, open its window immediately and change the toggle before it
+  switches: your choice is kept, and the log shows `default skipped at …: set
+  in the sign window` instead of an applied line.
+- Place an arrow, open its window immediately and type a text: the default
+  still applies — text is not a visibility choice.
+
 **A newly placed sign is a client-predicted spawn, and the default waits for
-the server to confirm it.** The entity the sign spawns as carries no real
-ghost id yet (`GhostInstance.ghostId == 0`) and still has
-`PredictedGhostSpawnRequest` — NetCode later promotes that *same* entity to
-the confirmed ghost rather than replacing it with a second spawn, but an RPC
-sent before that promotion would have named an entity the server cannot
-resolve. So the mod queues a matched placement and sends
-`SetWorldLabelVisibility` only once the entity's ghost id is confirmed,
-checked every frame. If the ghost is never confirmed within 5 seconds — or
-the sign despawns, or its state/text changes first — the mod drops the wait
-instead of sending (see *Reading the log*). How long the confirmation
-actually takes is not yet measured — read the `<seconds>` value off the
-applied line in the next in-game run and note it here.
+the server to confirm it.** The sign's entity carries no real ghost id yet
+(`GhostInstance.ghostId == 0`) and still has `PredictedGhostSpawnRequest`; an
+RPC naming it then cannot be resolved by the server. NetCode later promotes the
+same entity to the confirmed ghost, so the mod checks every frame and sends
+`SetWorldLabelVisibility` once the ghost id is real, provided the sign still
+exists and is still at Hover. The game's sign window reads the state only when
+it opens, so if it is open on that sign at the moment of the send, the mod sets
+the window's toggle to match — or, if the player already moved the toggle off
+Hover, sends nothing.
+
+**Result, 2026-09-30 (CK 1.3.0.4, singleplayer, macOS/CrossOver, dev build
+9999984):** the gap between placement and send was 0.12–0.18 s across nine
+placements, and each applied state held when checked a second later. The
+three sign-window checks above have not been run yet.

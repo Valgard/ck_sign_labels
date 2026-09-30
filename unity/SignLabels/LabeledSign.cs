@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using Unity.Mathematics;
-using Unity.NetCode; // DIAG — only needed for LogSpawnDiagnostics below.
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -100,7 +99,6 @@ namespace SignLabels
             base.OnSpawn();
             TileX = (int)math.round(WorldPosition.x);
             TileZ = (int)math.round(WorldPosition.z);
-            LogSpawnDiagnostics(); // DIAG
             try
             {
                 AnySpawned?.Invoke(this);
@@ -116,33 +114,8 @@ namespace SignLabels
             }
         }
 
-        // DIAG — temporary, added for Task 4 fix round 1 (default-visibility RPC not taking
-        // effect). Logs every spawn, matched or not, so a session's log can be read against
-        // DefaultVisibility's `placement at` / `default … applied` lines. Remove once the
-        // investigation is closed.
-        private void LogSpawnDiagnostics()
-        {
-            bool hasGhost = world.EntityManager.HasComponent<GhostInstance>(entity);
-            string ghostInfo = "no";
-            if (hasGhost)
-            {
-                var ghost = world.EntityManager.GetComponentData<GhostInstance>(entity);
-                string spawnTick = ghost.spawnTick.IsValid ? ghost.spawnTick.SerializedData.ToString() : "invalid";
-                ghostInfo = $"yes ghostId={ghost.ghostId} spawnTick={spawnTick}";
-            }
-            bool hasSpawnRequest = world.EntityManager.HasComponent<PredictedGhostSpawnRequest>(entity);
-            bool hasPredictedGhost = world.EntityManager.HasComponent<PredictedGhost>(entity);
-
-            Debug.Log(
-                $"[SignLabels] DIAG spawn {name} at ({TileX},{TileZ}) entity={entity.Index}:{entity.Version} world={world.Name} "
-                    + $"state={GetState()} ghost={ghostInfo} predictedSpawnRequest={hasSpawnRequest} predictedGhost={hasPredictedGhost}"
-            );
-        }
-
         protected override void OnDespawn()
         {
-            // DIAG — see LogSpawnDiagnostics above; same fix round.
-            Debug.Log($"[SignLabels] DIAG despawn {name} at ({TileX},{TileZ}) entity={entity.Index}:{entity.Version}");
             OnPlayerLeft();
             base.OnDespawn();
         }

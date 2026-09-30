@@ -83,35 +83,6 @@ namespace SignLabels
 
         private static readonly List<PendingSend> _pendingSends = new();
 
-        // DIAG — temporary. One entry per applied default; RunPendingChecks logs each once it is due,
-        // then drops it. Remove this struct, the list, RunPendingChecks and its call site together
-        // once no longer needed.
-        private readonly struct PendingCheck
-        {
-            public readonly LabeledSign Sign;
-            public readonly Entity EntityAtApply;
-            public readonly World WorldAtApply;
-            public readonly int TileX;
-            public readonly int TileZ;
-            public readonly float DueAt;
-
-            public PendingCheck(LabeledSign sign, Entity entityAtApply, World worldAtApply, int tileX, int tileZ, float dueAt)
-            {
-                Sign = sign;
-                EntityAtApply = entityAtApply;
-                WorldAtApply = worldAtApply;
-                TileX = tileX;
-                TileZ = tileZ;
-                DueAt = dueAt;
-            }
-        }
-
-        // DIAG
-        private const float DiagRecheckDelaySeconds = 1f;
-
-        // DIAG
-        private static readonly List<PendingCheck> _pendingChecks = new();
-
         /// <summary>Called once from <see cref="SignLabelsMod.Init"/>, after the Choice is built.</summary>
         public static void Bind(SettingHandle<Visibility> handle)
         {
@@ -139,7 +110,6 @@ namespace SignLabels
             _lastNow = now;
 
             ProcessPendingSends(now);
-            RunPendingChecks(now); // DIAG
 
             var player = Manager.main != null ? Manager.main.player : null;
             if (player == null)
@@ -168,8 +138,6 @@ namespace SignLabels
         {
             if (_pendingSends.Count > 0)
                 _pendingSends.Clear();
-            if (_pendingChecks.Count > 0)
-                _pendingChecks.Clear(); // DIAG
         }
 
         /// <summary>
@@ -177,8 +145,15 @@ namespace SignLabels
         /// (not 0) and no more <see cref="PredictedGhostSpawnRequest"/>. Drops an entry silently when
         /// its sign is gone, its entity is no longer the one that was matched (despawned, or its
         /// pooled component reused for something else), its world is no longer created, or its
-        /// state/text changed under it (someone else already acted on it) — and drops it with a log
-        /// line when the confirmation window (<see cref="PendingSendTimeoutSeconds"/>) runs out first.
+        /// state is no longer the spawn default (someone already chose one) — and drops it with a
+        /// log line when the confirmation window (<see cref="PendingSendTimeoutSeconds"/>) runs out
+        /// first. Text on the sign does not matter: typing a label is not a visibility choice.
+        ///
+        /// <para>The game's sign window reads the state once, when it opens
+        /// (<c>SignTextUI.ShowUI</c>), so a window opened on this sign before the send still shows
+        /// Hover. When the send is due and that window is open on this sign, its toggle decides: a
+        /// toggle the player already moved off Hover means they chose, and nothing is sent;
+        /// otherwise the default is sent and the toggle is set to match it.</para>
         /// </summary>
         private static void ProcessPendingSends(float now)
         {
@@ -195,13 +170,7 @@ namespace SignLabels
                 bool sameEntity = signAlive && pending.Sign.entity == pending.Entity;
                 bool worldUsable = pending.World != null && pending.World.IsCreated;
                 bool entityExists = signAlive && sameEntity && worldUsable && pending.World.EntityManager.Exists(pending.Entity);
-                if (!entityExists)
-                {
-                    _pendingSends.RemoveAt(i);
-                    continue;
-                }
-
-                if (pending.Sign.GetState() != 1 || !string.IsNullOrEmpty(pending.Sign.GetName()))
+                if (!entityExists || pending.Sign.GetState() != (int)Visibility.Hover)
                 {
                     _pendingSends.RemoveAt(i);
                     continue;
@@ -217,20 +186,22 @@ namespace SignLabels
                     var player = Manager.main != null ? Manager.main.player : null;
                     if (player != null)
                     {
+                        SignTextUI window = OpenWindowFor(player, pending.Sign);
+                        if (window != null && window.signStateToggle.stateIndex != (int)Visibility.Hover)
+                        {
+                            Debug.Log($"[SignLabels] default skipped at ({pending.TileX},{pending.TileZ}): set in the sign window");
+                            _pendingSends.RemoveAt(i);
+                            continue;
+                        }
+
                         player.playerCommandSystem.SetWorldLabelVisibility(pending.Entity, (int)pending.Value);
+                        // Not SignTextUI.SetVisibilityState(): that sends the RPC a second time.
+                        if (window != null)
+                            window.signStateToggle.SetState((int)pending.Value);
+
                         float elapsedSeconds = now - pending.PlacementAt;
                         string elapsedText = elapsedSeconds.ToString("F2", CultureInfo.InvariantCulture);
                         Debug.Log($"[SignLabels] default {pending.Value} applied at ({pending.TileX},{pending.TileZ}) after {elapsedText} s");
-
-                        // DIAG — entity identity + ghost id at the moment of the RPC, plus a recheck
-                        // ~1s later (see RunPendingChecks) to see whether the state actually stuck.
-                        Debug.Log(
-                            $"[SignLabels] DIAG applied entity={pending.Entity.Index}:{pending.Entity.Version} ghostId={ghostId} at ({pending.TileX},{pending.TileZ})"
-                        );
-                        _pendingChecks.Add(
-                            new PendingCheck(pending.Sign, pending.Entity, pending.World, pending.TileX, pending.TileZ, now + DiagRecheckDelaySeconds)
-                        );
-
                         _pendingSends.RemoveAt(i);
                         continue;
                     }
@@ -249,31 +220,14 @@ namespace SignLabels
             }
         }
 
-        // DIAG — timestamp-based, not per-frame logging: this walks the (normally empty) pending
-        // list every Tick, but only logs an entry once its DueAt has passed, then removes it.
-        private static void RunPendingChecks(float now)
+        /// <summary>The game's sign window if it is showing and open on <paramref name="sign"/>;
+        /// null otherwise.</summary>
+        private static SignTextUI OpenWindowFor(PlayerController player, LabeledSign sign)
         {
-            for (int i = _pendingChecks.Count - 1; i >= 0; i--)
-            {
-                var check = _pendingChecks[i];
-                if (now < check.DueAt)
-                    continue;
-                _pendingChecks.RemoveAt(i);
-
-                bool signAlive = check.Sign != null;
-                bool sameEntity = signAlive && check.Sign.entity == check.EntityAtApply;
-                bool worldUsable = check.WorldAtApply != null && check.WorldAtApply.IsCreated;
-                bool entityExists = signAlive && worldUsable && check.WorldAtApply.EntityManager.Exists(check.EntityAtApply);
-                int stateNow = signAlive ? check.Sign.GetState() : -1;
-                int ghostIdNow = -1;
-                if (entityExists && check.WorldAtApply.EntityManager.HasComponent<GhostInstance>(check.EntityAtApply))
-                    ghostIdNow = check.WorldAtApply.EntityManager.GetComponentData<GhostInstance>(check.EntityAtApply).ghostId;
-
-                Debug.Log(
-                    $"[SignLabels] DIAG recheck at ({check.TileX},{check.TileZ}) entity={check.EntityAtApply.Index}:{check.EntityAtApply.Version} "
-                        + $"signAlive={signAlive} sameEntity={sameEntity} entityExists={entityExists} stateNow={stateNow} ghostId={ghostIdNow}"
-                );
-            }
+            var window = Manager.ui != null ? Manager.ui.signUI : null;
+            if (window == null || window.signStateToggle == null || !window.isShowing)
+                return null;
+            return player.activeWorldLabel == sign ? window : null;
         }
 
         private static void OnSignSpawned(LabeledSign sign)
@@ -282,9 +236,7 @@ namespace SignLabels
             // the state every sign spawns in.
             if (_handle == null || _handle.Value == Visibility.Hover)
                 return;
-            if (sign.GetState() != 1)
-                return;
-            if (!string.IsNullOrEmpty(sign.GetName()))
+            if (sign.GetState() != (int)Visibility.Hover)
                 return;
             if (!_matcher.TryConsume(sign.TileX, sign.TileZ, _lastNow, out float elapsedSeconds))
                 return;
