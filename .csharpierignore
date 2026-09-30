@@ -1,0 +1,8 @@
+# Required, not optional: CSharpier's ignore-file search walks up past this
+# repo into core_keeper/, whose .csharpierignore is an allowlist for utils/
+# only. Without this file every source here falls outside that allowlist and
+# the gate silently checks zero files.
+#
+# Sibling worktrees live inside the repo and carry their own copies of the
+# sources; formatting them from here would fight the worktree's own hook.
+.worktrees/

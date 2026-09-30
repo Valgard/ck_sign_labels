@@ -1,0 +1,14 @@
+# Localisation table for SignLabels — namespace at indent 0, term at indent 2,
+# its values at indent 4. Every build turns this into TextDataBlock assets; a
+# table with no terms is skipped, so the file is inert until the first real
+# entry. Uncomment and edit:
+#
+# SignLabels-Config:
+#   enabled:
+#     hint: "Master on/off toggle label."
+#     en: "Enabled"
+#     de: "Aktiviert"
+#
+# Leaf keys stay unquoted. The generator rejects a U+2026 ellipsis and a U+2014
+# em dash in values: the game's thin font crashes on the first and renders the
+# second as a plain hyphen. Write '...' and '-'.

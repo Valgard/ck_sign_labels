@@ -1,0 +1,8 @@
+[b]Sign Labels[/b]
+
+Lets arrows and other signs carry a label, edited in the game's own sign window.
+
+[h2]Features[/h2]
+[list]
+[*] Describe what the mod does.
+[/list]

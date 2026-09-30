@@ -1,0 +1,48 @@
+# macOS
+.DS_Store
+
+# Worktrees
+.worktrees/
+
+# Editors / IDEs
+.idea/
+.vscode/
+*.swp
+
+# Build artifacts
+bin/
+obj/
+build/
+*.dll
+*.pdb
+
+# Unity generated
+Library/
+Temp/
+Logs/
+UserSettings/
+*.csproj
+*.sln
+
+# Env / secrets
+.env
+.envrc
+.envrc.local
+
+# Superpowers process artifacts — plans and brainstorming scratch, slop once
+# the work is implemented. docs/specs/ and docs/adrs/ stay tracked.
+docs/superpowers/
+
+# LocalizationGenerator output (regenerated each build from localization/localization.yaml)
+unity/SignLabels/Localization/Generated/
+unity/SignLabels/Localization/Generated.meta
+
+# Shared editor helpers — symlinked in by utils/link.sh (the .cs are symlinks
+# into ../utils, the .meta are Unity-generated locally; no asset references
+# them by GUID, so neither belongs in the repo).
+unity/SignLabels/Editor/CLIBuildHelper.cs
+unity/SignLabels/Editor/CLIBuildHelper.cs.meta
+unity/SignLabels/Editor/CLIPublishHelper.cs
+unity/SignLabels/Editor/CLIPublishHelper.cs.meta
+unity/SignLabels/Editor/LocalizationGenerator.cs
+unity/SignLabels/Editor/LocalizationGenerator.cs.meta

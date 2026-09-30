@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+# SignLabels — environment variables.
+#
+# Machine-level shared values (UNITY_BIN, SDK_PATH, CK_GAME_VERSION,
+# MODIO_DEPS_MAP, LOC_TABLE, the ilspycmd PATH entry) are inherited from the
+# parent core_keeper/.envrc — define them once there, not here.
+#
+#   cp .envrc.example .envrc
+#   direnv allow                     # then `cd` triggers the chain
+#   # or, without direnv:  source .envrc && ../utils/build.sh
+#   #   from a worktree:   source .envrc && ../../../utils/build.sh
+
+# --- Inherit shared values from the nearest ancestor core_keeper/.envrc ------
+# The manual branch walks up instead of naming a depth, because this file is
+# copied verbatim into a worktree under .worktrees/<name>/, which sits one level
+# deeper than the mod directory. The SDK_PATH test is what makes the walk safe:
+# `source` does not change $PWD, so from a worktree the first *existing* hit
+# would be the mod's own .envrc — this same file — whose loop would then restart
+# against the same $PWD and never reach the parent. Only the parent defines
+# SDK_PATH, so testing content rather than position ends the walk in one place
+# regardless of how deep the caller sits. The test matches the ASSIGNMENT, not
+# the name: every mod .envrc mentions SDK_PATH in its own header comment, and a
+# looser grep therefore selects the mod file, sources it, and recurses.
+# direnv needs none of it: source_up_if_exists searches upward on its own.
+if command -v source_up_if_exists >/dev/null 2>&1; then
+    source_up_if_exists
+else
+    for _up in ../.envrc ../../.envrc ../../../.envrc ../../../../.envrc; do
+        if [ -f "$_up" ] && grep -q '^export SDK_PATH=' "$_up"; then
+            # shellcheck disable=SC1090
+            source "$_up"; break
+        fi
+    done
+    unset _up
+fi
+
+# --- Mod identity (project-inherent — leave as-is) --------------------------
+
+# PascalCase name — drives SDK symlink paths and the build entry point.
+export MOD_NAME="SignLabels"
+
+# kebab-case id, written as `name_id` in the fake mod.io state.json.
+export MOD_NAME_ID="sign-labels"
+
+# One-line summary, written into state.json by utils/install-macos.sh.
+export MOD_SUMMARY="Lets arrows and other signs carry a label, edited in the game's own sign window."
+
+# Fake mod.io ID — must be DISTINCT per mod.
+export FAKE_MOD_ID="9999984"
+
+# Repo root, read by the shared CLIPublishHelper to locate CHANGELOG.md.
+export MOD_REPO_ROOT="$PWD"
+
+# mod.io "Type" tags for the listing — PIPE-separated, because the values
+# contain spaces. Synchronised (not just added) by the shared
+# CLIPublishHelper, so a value dropped here is removed on mod.io. Valid:
+# Visual, Audio, Item, NPC, Quality of Life, Overhaul, Language, World,
+# Library, Other.
+export CK_MODIO_TYPE="Quality of Life"
+
+# Forum tags for the mod's #available-mods thread on the Core Keeper Discord —
+# PIPE-separated, because "Misc / Other" contains spaces. Deliberately blank: a
+# mod this new has no thread, and the tags belong to one. The channel's current
+# tag set lives in utils/ck-discord-tags.json and is read via forum_tags() in
+# utils/discord_post.py, which refuses anything else — deliberately not copied
+# here, because a copy written into a generated repo can never be corrected and
+# the set belongs to a channel somebody else administers. Filling this in is part
+# of writing the post.
+export CK_DISCORD_TAGS=""
+
+# The mod's thread in #available-mods, once it has one. Empty means no thread
+# yet, so the ck-discord-post skill creates a post; set means a new version is
+# announced as a comment there. Filled in after the first post, not by hand.
+export CK_DISCORD_THREAD=""
+
+# Images and clips for the post, beyond the logo — PIPE-separated, in the order
+# they should appear. A relative path becomes an attachment, an http(s) URL
+# becomes its own follow-up message (the only route for a clip past Discord's
+# upload ceiling). Empty is legitimate here, unlike CK_DISCORD_TAGS: it means
+# the mod has nothing to show beyond its logo, which is true of a chat command.
+export CK_DISCORD_MEDIA=""
+
+# --- Localisation (read by utils/CLIBuildHelper.cs -> LocalizationGenerator.GenerateFromEnv) ---
+# LOC_TABLE (the shared CK language-address table) is inherited from the parent core_keeper/.envrc.
+# Wired from the start even for a mod with no text yet: a table holding no terms
+# is skipped, so writing the first term is the only step needed later.
+export LOC_YAML="$PWD/localization/localization.yaml"
+export LOC_OUT="$PWD/unity/$MOD_NAME/Localization/Generated"
