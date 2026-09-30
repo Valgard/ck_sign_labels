@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using ModSettingsMenu.Settings;
@@ -185,43 +186,56 @@ namespace SignLabels
             for (int i = _awaitingEcho.Count - 1; i >= 0; i--)
             {
                 var awaiting = _awaitingEcho[i];
-
-                // Same ordering as ProcessPendingSends: GetState() goes through EntityManager, so
-                // every guard has to hold before it runs.
-                bool signAlive = awaiting.Sign != null;
-                bool sameEntity = signAlive && awaiting.Sign.entity == awaiting.Entity;
-                bool worldUsable = awaiting.World != null && awaiting.World.IsCreated;
-                bool entityExists = signAlive && sameEntity && worldUsable && awaiting.World.EntityManager.Exists(awaiting.Entity);
-                if (!entityExists)
+                try
                 {
-                    _awaitingEcho.RemoveAt(i);
-                    continue;
-                }
+                    // Same ordering as ProcessPendingSends: GetState() goes through EntityManager, so
+                    // every guard has to hold before it runs.
+                    bool signAlive = awaiting.Sign != null;
+                    bool sameEntity = signAlive && awaiting.Sign.entity == awaiting.Entity;
+                    bool worldUsable = awaiting.World != null && awaiting.World.IsCreated;
+                    bool entityExists = signAlive && sameEntity && worldUsable && awaiting.World.EntityManager.Exists(awaiting.Entity);
+                    if (!entityExists)
+                    {
+                        _awaitingEcho.RemoveAt(i);
+                        continue;
+                    }
 
-                if (awaiting.Sign.GetState() == (int)awaiting.Value)
+                    if (awaiting.Sign.GetState() == (int)awaiting.Value)
+                    {
+                        var player = Manager.main != null ? Manager.main.player : null;
+                        SignTextUI window = player != null ? OpenWindowFor(player, awaiting.Sign) : null;
+                        // Not SignTextUI.SetVisibilityState(): that would send the RPC again.
+                        if (window != null && window.signStateToggle.stateIndex == (int)Visibility.Hover)
+                            window.signStateToggle.SetState((int)awaiting.Value);
+                        _awaitingEcho.RemoveAt(i);
+                        continue;
+                    }
+
+                    if (now >= awaiting.ExpiresAt)
+                        _awaitingEcho.RemoveAt(i);
+                }
+                catch (Exception ex)
                 {
-                    var player = Manager.main != null ? Manager.main.player : null;
-                    SignTextUI window = player != null ? OpenWindowFor(player, awaiting.Sign) : null;
-                    // Not SignTextUI.SetVisibilityState(): that would send the RPC again.
-                    if (window != null && window.signStateToggle.stateIndex == (int)Visibility.Hover)
-                        window.signStateToggle.SetState((int)awaiting.Value);
+                    // A throw here would otherwise repeat every frame until the sign or its entity
+                    // goes away on its own — drop the entry now so the per-frame path fails once.
+                    Debug.LogError($"[SignLabels] echo watch threw ({ex}); dropped a pending window refresh");
                     _awaitingEcho.RemoveAt(i);
-                    continue;
                 }
-
-                if (now >= awaiting.ExpiresAt)
-                    _awaitingEcho.RemoveAt(i);
             }
         }
 
         /// <summary>
-        /// Sends the deferred RPC for each pending sign once its ghost is confirmed: real ghost id
-        /// (not 0) and no more <see cref="PredictedGhostSpawnRequest"/>. Drops an entry silently when
-        /// its sign is gone, its entity is no longer the one that was matched (despawned, or its
-        /// pooled component reused for something else), its world is no longer created, or its
-        /// state is no longer the spawn default (someone already chose one) — and drops it with a
-        /// log line when the confirmation window (<see cref="PendingSendTimeoutSeconds"/>) runs out
-        /// first. Text on the sign does not matter: typing a label is not a visibility choice.
+        /// Sends the deferred RPC for each pending sign once its ghost id is confirmed real (not 0).
+        /// <see cref="PredictedGhostSpawnRequest"/> is also checked, but per the handbook's
+        /// multiplayer chapter NetCode removes that component one simulation step after spawn
+        /// regardless of confirmation — it is no marker to wait on — so by the time the ghost id is
+        /// real the component is already gone; the check is redundant defence, not the actual gate.
+        /// Drops an entry silently when its sign is gone, its entity is no longer the one that was
+        /// matched (despawned, or its pooled component reused for something else), its world is no
+        /// longer created, or its state is no longer the spawn default (someone already chose one) —
+        /// and drops it with a log line when the confirmation window
+        /// (<see cref="PendingSendTimeoutSeconds"/>) runs out first. Text on the sign does not
+        /// matter: typing a label is not a visibility choice.
         ///
         /// <para>The game's sign window reads the state once, when it opens
         /// (<c>SignTextUI.ShowUI</c>), so a window opened on this sign before the send still shows
@@ -235,66 +249,78 @@ namespace SignLabels
             for (int i = _pendingSends.Count - 1; i >= 0; i--)
             {
                 var pending = _pendingSends[i];
-
-                // Every condition here has to hold before an EntityManager call is safe: a destroyed
-                // sign, a reused pooled component, or a world that is no longer created (the session
-                // ended while this entry was waiting) must all stop the lookup before it runs, not
-                // only after — touching EntityManager on a disposed World is undefined behaviour with
-                // safety checks off, and throws every frame with them on.
-                bool signAlive = pending.Sign != null;
-                bool sameEntity = signAlive && pending.Sign.entity == pending.Entity;
-                bool worldUsable = pending.World != null && pending.World.IsCreated;
-                bool entityExists = signAlive && sameEntity && worldUsable && pending.World.EntityManager.Exists(pending.Entity);
-                if (!entityExists || pending.Sign.GetState() != (int)Visibility.Hover)
+                try
                 {
-                    _pendingSends.RemoveAt(i);
-                    continue;
-                }
-
-                bool hasGhost = pending.World.EntityManager.HasComponent<GhostInstance>(pending.Entity);
-                int ghostId = hasGhost ? pending.World.EntityManager.GetComponentData<GhostInstance>(pending.Entity).ghostId : 0;
-                bool hasPredictedSpawnRequest = pending.World.EntityManager.HasComponent<PredictedGhostSpawnRequest>(pending.Entity);
-                bool confirmed = hasGhost && ghostId != 0 && !hasPredictedSpawnRequest;
-
-                if (confirmed)
-                {
-                    var player = Manager.main != null ? Manager.main.player : null;
-                    if (player != null)
+                    // Every condition here has to hold before an EntityManager call is safe: a
+                    // destroyed sign, a reused pooled component, or a world that is no longer created
+                    // (the session ended while this entry was waiting) must all stop the lookup before
+                    // it runs, not only after — touching EntityManager on a disposed World is
+                    // undefined behaviour with safety checks off, and throws every frame with them on.
+                    bool signAlive = pending.Sign != null;
+                    bool sameEntity = signAlive && pending.Sign.entity == pending.Entity;
+                    bool worldUsable = pending.World != null && pending.World.IsCreated;
+                    bool entityExists = signAlive && sameEntity && worldUsable && pending.World.EntityManager.Exists(pending.Entity);
+                    if (!entityExists || pending.Sign.GetState() != (int)Visibility.Hover)
                     {
-                        SignTextUI window = OpenWindowFor(player, pending.Sign);
-                        if (window != null && window.signStateToggle.stateIndex != (int)Visibility.Hover)
-                        {
-                            Debug.Log($"[SignLabels] default skipped at ({pending.TileX},{pending.TileZ}): set in the sign window");
-                            _pendingSends.RemoveAt(i);
-                            continue;
-                        }
-
-                        player.playerCommandSystem.SetWorldLabelVisibility(pending.Entity, (int)pending.Value);
-                        // Not SignTextUI.SetVisibilityState(): that sends the RPC a second time.
-                        if (window != null)
-                            window.signStateToggle.SetState((int)pending.Value);
-                        // A window opened after this point still reads the old state; the echo
-                        // watch refreshes it once the new one arrives.
-                        _awaitingEcho.Add(new AwaitingEcho(pending.Sign, pending.Entity, pending.World, pending.Value, now + EchoTimeoutSeconds));
-
-                        float elapsedSeconds = now - pending.PlacementAt;
-                        string elapsedText = elapsedSeconds.ToString("F2", CultureInfo.InvariantCulture);
-                        Debug.Log($"[SignLabels] default {pending.Value} applied at ({pending.TileX},{pending.TileZ}) after {elapsedText} s");
                         _pendingSends.RemoveAt(i);
                         continue;
                     }
-                    // else: no player right now (should not normally happen while the sign itself
-                    // still exists) — fall through to the timeout check below instead of retrying
-                    // forever.
-                }
 
-                if (now >= pending.ExpiresAt)
+                    bool hasGhost = pending.World.EntityManager.HasComponent<GhostInstance>(pending.Entity);
+                    int ghostId = hasGhost ? pending.World.EntityManager.GetComponentData<GhostInstance>(pending.Entity).ghostId : 0;
+                    // Kept as defence, not as the real gate: NetCode removes this component one
+                    // step after spawn regardless of confirmation, so it is normally already gone
+                    // by the time ghostId is real.
+                    bool hasPredictedSpawnRequest = pending.World.EntityManager.HasComponent<PredictedGhostSpawnRequest>(pending.Entity);
+                    bool confirmed = hasGhost && ghostId != 0 && !hasPredictedSpawnRequest;
+
+                    if (confirmed)
+                    {
+                        var player = Manager.main != null ? Manager.main.player : null;
+                        if (player != null)
+                        {
+                            SignTextUI window = OpenWindowFor(player, pending.Sign);
+                            if (window != null && window.signStateToggle.stateIndex != (int)Visibility.Hover)
+                            {
+                                Debug.Log($"[SignLabels] default skipped at ({pending.TileX},{pending.TileZ}): set in the sign window");
+                                _pendingSends.RemoveAt(i);
+                                continue;
+                            }
+
+                            player.playerCommandSystem.SetWorldLabelVisibility(pending.Entity, (int)pending.Value);
+                            // Not SignTextUI.SetVisibilityState(): that sends the RPC a second time.
+                            if (window != null)
+                                window.signStateToggle.SetState((int)pending.Value);
+                            // A window opened after this point still reads the old state; the echo
+                            // watch refreshes it once the new one arrives.
+                            _awaitingEcho.Add(new AwaitingEcho(pending.Sign, pending.Entity, pending.World, pending.Value, now + EchoTimeoutSeconds));
+
+                            float elapsedSeconds = now - pending.PlacementAt;
+                            string elapsedText = elapsedSeconds.ToString("F2", CultureInfo.InvariantCulture);
+                            Debug.Log($"[SignLabels] default {pending.Value} applied at ({pending.TileX},{pending.TileZ}) after {elapsedText} s");
+                            _pendingSends.RemoveAt(i);
+                            continue;
+                        }
+                        // else: no player right now (should not normally happen while the sign itself
+                        // still exists) — fall through to the timeout check below instead of retrying
+                        // forever.
+                    }
+
+                    if (now >= pending.ExpiresAt)
+                    {
+                        string timeoutText = PendingSendTimeoutSeconds.ToString("F0", CultureInfo.InvariantCulture);
+                        Debug.Log($"[SignLabels] default not applied at ({pending.TileX},{pending.TileZ}): not confirmed by the server within {timeoutText} s");
+                        _pendingSends.RemoveAt(i);
+                    }
+                    // else: still waiting on the server — leave it in the list for the next Tick.
+                }
+                catch (Exception ex)
                 {
-                    string timeoutText = PendingSendTimeoutSeconds.ToString("F0", CultureInfo.InvariantCulture);
-                    Debug.Log($"[SignLabels] default not applied at ({pending.TileX},{pending.TileZ}): not confirmed by the server within {timeoutText} s");
+                    // A throw here would otherwise repeat every frame until the sign or its entity
+                    // goes away on its own — drop the entry now so the per-frame path fails once.
+                    Debug.LogError($"[SignLabels] default send at ({pending.TileX},{pending.TileZ}) threw ({ex}); dropped");
                     _pendingSends.RemoveAt(i);
                 }
-                // else: still waiting on the server — leave it in the list for the next Tick.
             }
         }
 
