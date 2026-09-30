@@ -1,8 +1,30 @@
-[b]Sign Labels[/b]
+[h1]Sign Labels[/h1]
 
-Lets arrows and other signs carry a label, edited in the game's own sign window.
+Core Keeper's text sign already lets you write on it. The placeable arrow doesn't, and neither do the skull, brute, warning and wooden signs — so marking a waypoint with an arrow has always meant planting a separate text sign right next to it. Sign Labels fixes that: interact with any of these seven signs and the game's own sign window opens, exactly like it does on a text sign.
 
-[h2]Features[/h2]
+[h2]Seven signs, one window[/h2]
 [list]
-[*] Describe what the mod does.
+[*] Arrow Sign ([i]Richtungsschild[/i])
+[*] Skull Effigy ([i]Schädel-Schild[/i])
+[*] Brute Sign ([i]Schläger-Schild[/i])
+[*] Yellow Warning Sign ([i]Gelbes Warnschild[/i])
+[*] Red Warning Sign ([i]Rotes Warnschild[/i])
+[*] Wooden Sign "Core" ([i]Holzschild „Kern"[/i])
+[*] Wooden Sign "Tulip" ([i]Holzschild „Tulpe"[/i])
 [/list]
+
+Each opens the game's own sign window — text, visibility toggle, parental filter and controller support all included, the same as the vanilla text sign. The three signs that already carry a vanilla label — the text sign, the metropolis sign and the excavation sign — are untouched.
+
+[b]A default for new signs.[/b] Set what a freshly placed sign should start at — Off, only while targeted, or Always — in Options → Mod settings → Sign Labels. Only your own placements are affected; a sign loaded from a save keeps its saved state. Mining a labelled sign always drops exactly one, whatever its visibility is set to.
+
+[b]Multiplayer:[/b] this mod adds data to the signs' own entities, so it's needed on both sides — install it on the server and on every connecting client.
+
+[b]Compatibility:[/b] works alongside More Labels — its hover option applies to these signs' labels too.
+
+[h2]Settings[/h2]
+
+Open Options → Mod settings → Sign Labels to set the default visibility for newly placed signs — no config files.
+
+[hr][/hr]
+
+Built with the official Pugstorm Core Keeper Mod SDK. Personal-use, non-commercial (Core Keeper EULA). Not affiliated with or endorsed by Pugstorm.
