@@ -5,9 +5,10 @@ using UnityEngine;
 namespace SignLabels
 {
     /// <summary>
-    /// Mod bootstrap. The Pugstorm mod loader instantiates this class on game
-    /// start and calls the IMod lifecycle methods. Harmony patch classes are
-    /// auto-discovered by the loader — there is no PatchAll() call.
+    /// Mod bootstrap. Builds the Mod Settings Menu option for the default visibility in
+    /// <see cref="Init"/> and drives <see cref="DefaultVisibility.Tick"/> every frame from
+    /// <see cref="Update"/>. The labels themselves come from <see cref="SignLabelConverter"/> and
+    /// <see cref="LabeledSign"/>, which need nothing from this class. The mod has no Harmony patches.
     /// </summary>
     public sealed class SignLabelsMod : IMod
     {

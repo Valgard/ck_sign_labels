@@ -168,7 +168,7 @@ namespace SignLabels
             UpdateWorldText("");
         }
 
-        public void Interact()
+        private void Interact()
         {
             var player = Manager.main.player;
             if (player == null)
@@ -178,7 +178,7 @@ namespace SignLabels
             Manager.ui.OnSignWindowOpen();
         }
 
-        public void OnPlayerLeft()
+        private void OnPlayerLeft()
         {
             var player = Manager.main.player;
             if (player == null || player.activeWorldLabel != this)

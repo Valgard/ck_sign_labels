@@ -43,7 +43,11 @@ namespace SignLabels
             new(ObjectID.WoodenSign2, "WoodenSign", e => e is WoodenSign),
         };
 
-        public static IReadOnlyList<SignLabelTarget> All => Targets;
+        // A read-only wrapper, not the array itself: an array handed out as IReadOnlyList can be
+        // cast back to IList and written to.
+        private static readonly IReadOnlyList<SignLabelTarget> ReadOnlyTargets = Array.AsReadOnly(Targets);
+
+        public static IReadOnlyList<SignLabelTarget> All => ReadOnlyTargets;
 
         public static bool TryGet(ObjectID id, out SignLabelTarget target)
         {
