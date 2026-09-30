@@ -67,10 +67,11 @@ Labels** and set **Default visibility**.
 
 ## Compatibility
 
-Works alongside **More Labels**: that mod patches the game's own label
-rendering and hover logic globally, so once it's installed its own hover
-option applies to these signs' labels too — the same as it already does to
-the mannequins, aquariums, terrariums and pedestals it labels itself.
+Works alongside **More Labels** with its default settings — both mods were
+loaded together throughout testing. More Labels patches the game's own label
+rendering and hover logic globally, so its hover option is expected to apply to
+these signs' labels too, as it does to the game's other world labels; that
+option itself has not been tested with this mod.
 
 ## Known Limitations
 

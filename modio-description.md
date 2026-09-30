@@ -28,8 +28,9 @@ text sign.
   saved state.
 - Mining a labelled sign always drops exactly one, whatever its visibility is
   set to.
-- Works alongside **More Labels** — its hover option applies to these signs'
-  labels too.
+- Works alongside **More Labels** with its default settings. Its hover option
+  should apply to these signs' labels as well, but that has not been tested
+  yet.
 
 ## Requirements
 

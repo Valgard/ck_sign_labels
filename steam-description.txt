@@ -19,7 +19,7 @@ Each opens the game's own sign window — text, visibility toggle, parental filt
 
 [b]Multiplayer:[/b] this mod adds data to the signs' own entities, so it's needed on both sides — install it on the server and on every connecting client.
 
-[b]Compatibility:[/b] works alongside More Labels — its hover option applies to these signs' labels too.
+[b]Compatibility:[/b] works alongside More Labels with its default settings. Its hover option should apply to these signs' labels as well, but that has not been tested yet.
 
 [h2]Settings[/h2]
 
