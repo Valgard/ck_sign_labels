@@ -122,10 +122,12 @@ the same failure mode a second time.
 
 `DefaultVisibility` cannot send `SetWorldLabelVisibility` the moment a placed
 sign spawns: a freshly placed sign is a **client-predicted** entity
-(`GhostInstance.ghostId == 0`, `PredictedGhostSpawnRequest` present), and an
-RPC naming it cannot be resolved by the server. NetCode later promotes the
-*same* entity to the real ghost rather than spawning a second one, so a
-matched sign is queued (`_pendingSends`) and the RPC is sent from
+(`GhostInstance.ghostId == 0`, `PredictedGhostSpawnRequest` present in the
+frame it spawns — the parent handbook's multiplayer chapter has NetCode
+remove that component one step later regardless, so it is no marker to wait
+on), and an RPC naming it cannot be resolved by the server. NetCode later
+promotes the *same* entity to the real ghost rather than spawning a second
+one, so a matched sign is queued (`_pendingSends`) and the RPC is sent from
 `ProcessPendingSends` only once the ghost id is confirmed real. Measured in
 singleplayer: 0.12–0.18 s between placement and send.
 

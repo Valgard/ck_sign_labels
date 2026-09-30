@@ -30,10 +30,10 @@ that workaround.
 - **A default for new signs.** In **Options → Mod settings → Sign Labels**,
   set the visibility a freshly placed sign should start at — Off, Hover or
   Always, default Hover (the vanilla behaviour for anything you place). Only
-  your own placements are affected; a sign loaded from a save, streamed in by
-  walking into its chunk, or placed by someone else keeps its own state. A
-  freshly placed sign briefly shows Hover before switching to the configured
-  default, well under a second.
+  your own placements are affected; a sign loaded from a save or streamed in
+  by walking into its chunk keeps its own state. A freshly placed sign
+  briefly shows Hover before switching to the configured default, well under
+  a second.
 - **Mining drops exactly one item**, whatever the sign's visibility — a sign
   set to Always never drops two just because its underlying "amount" field
   is 2.

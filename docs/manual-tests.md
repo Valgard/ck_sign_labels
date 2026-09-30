@@ -19,13 +19,15 @@ Player.log` shows all of them. A healthy session prints only these, each at most
 once:
 
 - `Mod initialized.` — at load.
-- `edited <RootName> prefab for <ids>` — once per graphical prefab while the
-  game converts its objects, so five lines at load: `SignArrow`,
-  `SignPostSkull`, `SignPostBrute`, `YellowWarningSign` (for both warning
-  signs) and `WoodenSign` (for both wooden signs). `<ids>` lists every target
-  id on that prefab as `<name> (<id>)`. A hosting client converts twice, once
-  for its client world and once for its server world; the line still appears
-  only once.
+- `edited <RootName> prefab for <ids>` — once per graphical prefab, the
+  first time the game converts its objects in this process: five lines at
+  load — `SignArrow`, `SignPostSkull`, `SignPostBrute`, `YellowWarningSign`
+  (for both warning signs) and `WoodenSign` (for both wooden signs). `<ids>`
+  lists every target id on that prefab as `<name> (<id>)`. A hosting client
+  converts twice, once for its client world and once for its server world;
+  the line still appears only once. The dedup is process-wide, not per-world:
+  loading a second world without restarting the game converts again but
+  prints none of the five.
 
 Placing a sign adds up to two more lines, once per placement rather than once
 per session:
@@ -85,6 +87,12 @@ per frame:
   no `ObjectNameTag`.
 - `AnySpawned handler threw` — followed by the exception; a subscriber to
   `LabeledSign.AnySpawned` failed. The sign itself spawned normally.
+- `DefaultVisibility.Bind received a null handle; defaultVisibility stays at
+  Hover and ignores the menu.` — Mod Settings Menu failed to build the
+  Choice; the default stays at the vanilla Hover and the menu option has no
+  effect.
+- `DefaultVisibility.Bind called more than once — the later handle wins.` —
+  a warning, not expected in a normal load; `Init` should call `Bind` once.
 
 ## Labelled signs
 
@@ -162,25 +170,31 @@ With the option at Off or Always, the sign window's toggle against the default:
 - Place an arrow, open its window immediately and type a text: the default
   still applies — text is not a visibility choice.
 
-**A newly placed sign is a client-predicted spawn, and the default waits for
-the server to confirm it.** The sign's entity carries no real ghost id yet
-(`GhostInstance.ghostId == 0`) and still has `PredictedGhostSpawnRequest`; an
-RPC naming it then cannot be resolved by the server. NetCode later promotes the
-same entity to the confirmed ghost, so the mod checks every frame and sends
-`SetWorldLabelVisibility` once the ghost id is real, provided the sign still
-exists and is still at Hover. The game's sign window reads the state only when
-it opens, so if it is open on that sign at the moment of the send, the mod sets
-the window's toggle to match — or, if the player already moved the toggle off
-Hover, sends nothing. A window opened after the send but before the server's
-new state reaches the client still reads Hover; the mod watches for that state
-for up to two seconds and, once it arrives, sets the toggle of a window still
-open on that sign, unless the player has moved the toggle off Hover.
+**A newly placed sign is a client-predicted spawn, and the default waits for the
+server to confirm it.** The sign's entity carries no real ghost id yet
+(`GhostInstance.ghostId == 0`) and, in the frame it spawns, a
+`PredictedGhostSpawnRequest` — the handbook's multiplayer chapter has NetCode
+remove that component one step later regardless, so it is no marker to wait on;
+an RPC naming the entity cannot be resolved by the server either way. NetCode
+later promotes the same entity to the confirmed ghost, so the mod checks every
+frame and sends `SetWorldLabelVisibility` once the ghost id is real, provided
+the sign still exists and is still at Hover. The game's sign window reads the
+state only when it opens, so if it is open on that sign at the moment of the
+send, the mod sets the window's toggle to match — or, if the player already
+moved the toggle off Hover, sends nothing. A window opened after the send but
+before the server's new state reaches the client still reads Hover; the mod
+watches for that state for up to two seconds and, once it arrives, sets the
+toggle of a window still open on that sign, unless the player has moved the
+toggle off Hover.
 
 **Result, 2026-09-30 (CK 1.3.0.4, singleplayer, macOS/CrossOver, dev build
 9999984):** the gap between placement and send was 0.12–0.18 s across ten
 placements. Always ended at state 2 and Off at state 0 when checked a second
 later. Signs loaded from the save kept their stored state, with no `placement
-at` line at load.
+at` line at load. Not run: confirming no `default … applied` line at Hover
+(the ten placements covered Off and Always only), a sign streamed in by
+walking into its chunk, and mining a sign and placing a new one on the same
+tile right away.
 
 **Result, 2026-09-30 (same setup, default Always), sign-window checks:**
 

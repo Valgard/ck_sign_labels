@@ -4,18 +4,21 @@ namespace SignLabels
 {
     /// <summary>
     /// Decides whether a sign that just spawned is the local player's own fresh placement, by
-    /// matching the placement RPC's start tick against the sign entity's spawn tile within a short
-    /// time window. Pure logic — no Unity or game types — so it can be exercised offline by
-    /// tests/placement-harness as well as compiled into the mod.
+    /// matching the local player's replicated <c>PlacementCD</c> start tick against the sign
+    /// entity's spawn tile within a short time window. Pure logic — no Unity or game types — so it
+    /// can be exercised offline by tests/placement-harness as well as compiled into the mod.
     ///
-    /// The caller observes a placement RPC via <see cref="Observe"/> (start tick + tile), then,
-    /// once the corresponding sign entity appears, calls <see cref="TryConsume"/> with that tile to
-    /// find out whether it was the just-placed one. A placement is consumable exactly once and
-    /// expires after <see cref="WindowSeconds"/>.
+    /// The caller observes the placement via <see cref="Observe"/> (start tick + tile), read once
+    /// per frame off <c>PlacementCD</c> rather than from any RPC, then, once the corresponding sign
+    /// entity appears, calls <see cref="TryConsume"/> with that tile to find out whether it was the
+    /// just-placed one. A placement is consumable exactly once and expires after
+    /// <see cref="WindowSeconds"/>.
     /// </summary>
     public sealed class PlacementMatcher
     {
-        // Provisional; Task 4 measures the real RPC-to-spawn latency and may change it.
+        // 3 s — about 20x the measured placement-to-spawn gap (0.12-0.18 s singleplayer,
+        // 0.31-0.35 s over a same-machine dedicated server), so the window never matters in
+        // practice; see docs/manual-tests.md.
         public const float WindowSeconds = 3f;
 
         private readonly struct Pending
@@ -44,10 +47,10 @@ namespace SignLabels
         }
 
         /// <summary>
-        /// Records a placement RPC's start tick and target tile. Returns true when this is a NEW
+        /// Records a placement's start tick and target tile. Returns true when this is a NEW
         /// placement — i.e. startTick differs from the last one observed and is not 0 ("no
-        /// placement yet"). Repeated observations that share the previous call's start tick (the
-        /// RPC firing more than once for the same placement) do not record a second pending entry.
+        /// placement yet"). The caller reads <c>PlacementCD</c> every frame, so most calls repeat
+        /// the previous one's start tick; those do not record a second pending entry.
         /// </summary>
         public bool Observe(uint startTick, int tileX, int tileZ, float now)
         {
@@ -73,7 +76,7 @@ namespace SignLabels
         /// <summary>
         /// Same as <see cref="TryConsume(int, int, float)"/>, plus how many seconds elapsed between
         /// <see cref="Observe"/> recording the placement and this call consuming it — 0 when nothing
-        /// was consumed. Added for Task 4's applied-default log line, which reports that elapsed time.
+        /// was consumed. This is what the mod's "default … applied … after N s" log line reports.
         /// </summary>
         public bool TryConsume(int tileX, int tileZ, float now, out float elapsedSeconds)
         {

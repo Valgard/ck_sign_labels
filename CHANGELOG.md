@@ -15,6 +15,5 @@ own sign window.
   controller support, exactly like the vanilla text sign.
 - **A Default visibility setting** (Options → Mod settings → Sign Labels):
   Off, Hover or Always, default Hover. Applied to a sign the local player
-  places; a sign loaded from a save, streamed in, or placed by someone else
-  keeps its own state.
+  places; a sign loaded from a save or streamed in keeps its own state.
 - **Mining always drops exactly one item**, whatever the sign's visibility.
