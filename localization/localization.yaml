@@ -1,14 +1,37 @@
 # Localisation table for SignLabels — namespace at indent 0, term at indent 2,
 # its values at indent 4. Every build turns this into TextDataBlock assets; a
 # table with no terms is skipped, so the file is inert until the first real
-# entry. Uncomment and edit:
-#
-# SignLabels-Config:
-#   enabled:
-#     hint: "Master on/off toggle label."
-#     en: "Enabled"
-#     de: "Aktiviert"
+# entry.
 #
 # Leaf keys stay unquoted. The generator rejects a U+2026 ellipsis and a U+2014
 # em dash in values: the game's thin font crashes on the first and renders the
 # second as a plain hyphen. Write '...' and '-'.
+#
+# Mod Settings Menu section (Options -> Mod settings). The framework looks up each
+# SETTING label by `<ModId>-Config/<key>` and the section HINT by `<ModId>-Config/_hint`.
+SignLabels-Config:
+  _hint:
+    hint: "Section hint shown under the Sign Labels heading."
+    en: "Visibility new signs start with when you place them."
+    de: "Sichtbarkeit, mit der neu platzierte Schilder starten."
+  defaultVisibility:
+    hint: "Choice label - default visibility state for newly placed signs."
+    en: "Default visibility"
+    de: "Standardsichtbarkeit"
+
+# Choice option labels for `defaultVisibility`. Each leaf is the enum token
+# (Visibility.<name>.ToString()), which is also what gets persisted -- renaming an enum
+# member here and in the C# resets that player's choice to the default and drops its label.
+SignLabels-Config/defaultVisibility:
+  Off:
+    hint: "Visibility option - the label never shows, even while targeted."
+    en: "Off"
+    de: "Aus"
+  Hover:
+    hint: "Visibility option - the vanilla default; the label shows only while the sign is targeted."
+    en: "Hover"
+    de: "Beim Anvisieren"
+  Always:
+    hint: "Visibility option - the label always shows, whether targeted or not."
+    en: "Always"
+    de: "Immer"

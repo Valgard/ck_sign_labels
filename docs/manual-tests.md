@@ -27,6 +27,19 @@ once:
   for its client world and once for its server world; the line still appears
   only once.
 
+Placing a sign adds two more lines, once per placement rather than once per
+session:
+
+- `placement at (<x>,<z>)` — the local player's own placement, read from
+  their replicated `PlacementCD`.
+- `default <state> applied at (<x>,<z>) after <seconds> s` — the configured
+  default was applied to the sign that spawned on that tile. `<state>` is the
+  current `Default visibility` option, `<seconds>` the time since the
+  `placement at` line above, to two decimals. Absent when the option is Hover
+  (a freshly placed sign already starts there), when no `LabeledSign` spawns
+  on that tile within the matching window, or when the sign that spawns there
+  already carries text (a re-placed sign the game recognises as the old one).
+
 Anything else is a warning or an error. Each is logged once per session, never
 per frame:
 
@@ -106,3 +119,22 @@ every text and visibility was as before. `Player.log` held exactly the five
 followed by `Mod initialized.`; no `failed` line and no `CompileFailed`. The only
 exception in the log was the game's own Steam-session `ObjectDisposedException`
 at quit, unrelated to the mod.
+
+## Default visibility
+
+In **Options → Mod Settings → Sign Labels**, the `Default visibility` option
+cycles Off / Hover / Always, default Hover. With it set to Off, then Hover,
+then Always in turn:
+
+- Place a new arrow: its label state matches the option right away, without
+  touching the sign's own toggle in its window. `Player.log` shows a
+  `placement at` line for the placement, followed by a `default … applied`
+  line naming the same tile and the matching state — except at Hover, where
+  no `default … applied` line appears, since a freshly placed sign already
+  starts there.
+- A sign loaded from a save keeps its stored state regardless of the current
+  option, with no `placement at` or `default … applied` line for it.
+- A sign streamed in by walking into its chunk keeps its state the same way.
+- Mine a sign and place a new one on the same tile right away: the new one gets
+  the current default too, with its own `placement at` / `default … applied`
+  pair.

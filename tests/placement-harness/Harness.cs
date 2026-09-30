@@ -108,6 +108,20 @@ internal static class Harness
             Check("two_placements_both_consumable", first && second, "first=" + first + " second=" + second);
         }
 
+        {
+            var m = new PlacementMatcher();
+            m.Observe(100, 5, 7, 0.3f);
+            bool consumed = m.TryConsume(5, 7, 2.0f, out float elapsed);
+            bool elapsedOk = Math.Abs(elapsed - 1.7f) < 0.0001f;
+            Check("consume_out_param_reports_elapsed_seconds", consumed && elapsedOk, "consumed=" + consumed + " elapsed=" + elapsed);
+        }
+
+        {
+            var m = new PlacementMatcher();
+            bool consumed = m.TryConsume(5, 7, 1, out float elapsed);
+            Check("consume_out_param_zero_when_nothing_consumed", !consumed && elapsed == 0f, "consumed=" + consumed + " elapsed=" + elapsed);
+        }
+
         Console.WriteLine();
         Console.WriteLine(_pass + " passed, " + _fail + " failed");
         Environment.Exit(_fail == 0 ? 0 : 1);

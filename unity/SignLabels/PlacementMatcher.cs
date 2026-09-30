@@ -67,6 +67,16 @@ namespace SignLabels
         /// </summary>
         public bool TryConsume(int tileX, int tileZ, float now)
         {
+            return TryConsume(tileX, tileZ, now, out _);
+        }
+
+        /// <summary>
+        /// Same as <see cref="TryConsume(int, int, float)"/>, plus how many seconds elapsed between
+        /// <see cref="Observe"/> recording the placement and this call consuming it — 0 when nothing
+        /// was consumed. Added for Task 4's applied-default log line, which reports that elapsed time.
+        /// </summary>
+        public bool TryConsume(int tileX, int tileZ, float now, out float elapsedSeconds)
+        {
             DropExpired(now);
 
             for (int i = 0; i < _pending.Count; i++)
@@ -74,11 +84,13 @@ namespace SignLabels
                 var p = _pending[i];
                 if (p.TileX == tileX && p.TileZ == tileZ)
                 {
+                    elapsedSeconds = now - p.RecordedAt;
                     _pending.RemoveAt(i);
                     return true;
                 }
             }
 
+            elapsedSeconds = 0f;
             return false;
         }
 
