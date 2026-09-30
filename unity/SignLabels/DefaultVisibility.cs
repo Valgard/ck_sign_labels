@@ -136,6 +136,31 @@ namespace SignLabels
         /// world — the main menu and the load screens both run through here.</summary>
         public static void Tick(float now)
         {
+            // The loader logs only the first exception to escape ANY mod's Update, across all mods
+            // (one shared latch), so a throw leaving here might never reach the log. Catch it here,
+            // log the first one, and clear the pending lists so a bad entry cannot throw again on
+            // the next frame; the placement watch itself is retried every frame.
+            try
+            {
+                TickCore(now);
+            }
+            catch (Exception ex)
+            {
+                ClearPending();
+                if (!_loggedTickException)
+                {
+                    _loggedTickException = true;
+                    Debug.LogError(
+                        $"[SignLabels] placement watch threw ({ex}); pending defaults were dropped, and new signs may not get the default visibility (logged once per session)"
+                    );
+                }
+            }
+        }
+
+        private static bool _loggedTickException;
+
+        private static void TickCore(float now)
+        {
             _lastNow = now;
 
             ProcessPendingSends(now);

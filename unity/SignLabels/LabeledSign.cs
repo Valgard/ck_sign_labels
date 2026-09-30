@@ -15,6 +15,7 @@ namespace SignLabels
         private static bool _loggedMissingInteractable;
         private static bool _loggedMissingWorldText;
         private static bool _loggedHandlerException;
+        private static bool _loggedAwakeException;
 
         /// <summary>Raised at the end of every spawn, after <see cref="TileX"/> and <see cref="TileZ"/> are set.</summary>
         public static event System.Action<LabeledSign> AnySpawned;
@@ -32,15 +33,55 @@ namespace SignLabels
             // `interactable` into InteractableObjectReferenceCD (left null, interaction never
             // fires), and OnSpawn rotates `interactable.transform` by the sign's direction (on the
             // root, that turns the whole sign edge-on).
-            MoveInteractableToChild();
-            base.Awake();
-            AttachWorldText();
-
-            if (interactable != null && interactable.onUseActions.Count > 0 && interactable.onTriggerExitActions.Count > 0)
+            //
+            // Each step of our own is guarded separately so that base.Awake() runs no matter what
+            // they do: skipping it would leave the game's own initialisation of this pooled instance
+            // undone, which is worse than a sign without interaction or label. A failed move clears
+            // `interactable` before base.Awake() caches it, so a half-finished move can never leave it
+            // pointing at the root (rule 2 in CLAUDE.md) — null costs only the interaction. Throws
+            // are logged once per session, as the null branches below are: Awake runs for every
+            // pooled instance.
+            try
             {
-                interactable.onUseActions[0].AddListener(Interact);
-                interactable.onTriggerExitActions[0].AddListener(OnPlayerLeft);
+                MoveInteractableToChild();
             }
+            catch (System.Exception e)
+            {
+                interactable = null;
+                LogAwakeFailureOnce("moving its InteractableObject to a child", "it cannot be interacted with", e);
+            }
+
+            base.Awake();
+
+            try
+            {
+                AttachWorldText();
+            }
+            catch (System.Exception e)
+            {
+                LogAwakeFailureOnce("attaching its text object", "its label cannot show", e);
+            }
+
+            try
+            {
+                if (interactable != null && interactable.onUseActions.Count > 0 && interactable.onTriggerExitActions.Count > 0)
+                {
+                    interactable.onUseActions[0].AddListener(Interact);
+                    interactable.onTriggerExitActions[0].AddListener(OnPlayerLeft);
+                }
+            }
+            catch (System.Exception e)
+            {
+                LogAwakeFailureOnce("wiring its interaction", "it cannot be interacted with", e);
+            }
+        }
+
+        private void LogAwakeFailureOnce(string step, string consequence, System.Exception e)
+        {
+            if (_loggedAwakeException)
+                return;
+            _loggedAwakeException = true;
+            Debug.LogError($"[SignLabels] LabeledSign {name} threw while {step} ({e}); {consequence} (logged once per session)");
         }
 
         private void MoveInteractableToChild()
