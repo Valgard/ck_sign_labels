@@ -83,6 +83,34 @@ namespace SignLabels
 
         private static readonly List<PendingSend> _pendingSends = new();
 
+        // A sign whose RPC has been sent, waiting for the new state to come back from the server.
+        // The game's sign window reads the state once, when it opens, so a window opened in the gap
+        // between the send and the server's answer shows Hover until it is reopened — see
+        // ProcessAwaitingEcho.
+        private readonly struct AwaitingEcho
+        {
+            public readonly LabeledSign Sign;
+            public readonly Entity Entity;
+            public readonly World World;
+            public readonly Visibility Value;
+            public readonly float ExpiresAt;
+
+            public AwaitingEcho(LabeledSign sign, Entity entity, World world, Visibility value, float expiresAt)
+            {
+                Sign = sign;
+                Entity = entity;
+                World = world;
+                Value = value;
+                ExpiresAt = expiresAt;
+            }
+        }
+
+        // How long to wait for the sent state to arrive back before forgetting the sign. The send
+        // has already happened; this only bounds how long an open window is watched.
+        private const float EchoTimeoutSeconds = 2f;
+
+        private static readonly List<AwaitingEcho> _awaitingEcho = new();
+
         /// <summary>Called once from <see cref="SignLabelsMod.Init"/>, after the Choice is built.</summary>
         public static void Bind(SettingHandle<Visibility> handle)
         {
@@ -110,6 +138,7 @@ namespace SignLabels
             _lastNow = now;
 
             ProcessPendingSends(now);
+            ProcessAwaitingEcho(now);
 
             var player = Manager.main != null ? Manager.main.player : null;
             if (player == null)
@@ -138,6 +167,51 @@ namespace SignLabels
         {
             if (_pendingSends.Count > 0)
                 _pendingSends.Clear();
+            if (_awaitingEcho.Count > 0)
+                _awaitingEcho.Clear();
+        }
+
+        /// <summary>
+        /// Refreshes the game's sign window once the sent state has arrived back from the server.
+        /// A window opened after the send but before the answer read Hover in
+        /// <c>SignTextUI.ShowUI</c> and never reads again; when the sign's state now equals the sent
+        /// value and that window is still open on this sign with its toggle untouched (still Hover),
+        /// the toggle is set to the sent value. Each entry is dropped once the state has arrived,
+        /// when its sign, entity or world is gone, or silently after
+        /// <see cref="EchoTimeoutSeconds"/>.
+        /// </summary>
+        private static void ProcessAwaitingEcho(float now)
+        {
+            for (int i = _awaitingEcho.Count - 1; i >= 0; i--)
+            {
+                var awaiting = _awaitingEcho[i];
+
+                // Same ordering as ProcessPendingSends: GetState() goes through EntityManager, so
+                // every guard has to hold before it runs.
+                bool signAlive = awaiting.Sign != null;
+                bool sameEntity = signAlive && awaiting.Sign.entity == awaiting.Entity;
+                bool worldUsable = awaiting.World != null && awaiting.World.IsCreated;
+                bool entityExists = signAlive && sameEntity && worldUsable && awaiting.World.EntityManager.Exists(awaiting.Entity);
+                if (!entityExists)
+                {
+                    _awaitingEcho.RemoveAt(i);
+                    continue;
+                }
+
+                if (awaiting.Sign.GetState() == (int)awaiting.Value)
+                {
+                    var player = Manager.main != null ? Manager.main.player : null;
+                    SignTextUI window = player != null ? OpenWindowFor(player, awaiting.Sign) : null;
+                    // Not SignTextUI.SetVisibilityState(): that would send the RPC again.
+                    if (window != null && window.signStateToggle.stateIndex == (int)Visibility.Hover)
+                        window.signStateToggle.SetState((int)awaiting.Value);
+                    _awaitingEcho.RemoveAt(i);
+                    continue;
+                }
+
+                if (now >= awaiting.ExpiresAt)
+                    _awaitingEcho.RemoveAt(i);
+            }
         }
 
         /// <summary>
@@ -153,7 +227,8 @@ namespace SignLabels
         /// (<c>SignTextUI.ShowUI</c>), so a window opened on this sign before the send still shows
         /// Hover. When the send is due and that window is open on this sign, its toggle decides: a
         /// toggle the player already moved off Hover means they chose, and nothing is sent;
-        /// otherwise the default is sent and the toggle is set to match it.</para>
+        /// otherwise the default is sent and the toggle is set to match it. A window opened after the
+        /// send but before the server's answer is refreshed by <see cref="ProcessAwaitingEcho"/>.</para>
         /// </summary>
         private static void ProcessPendingSends(float now)
         {
@@ -198,6 +273,9 @@ namespace SignLabels
                         // Not SignTextUI.SetVisibilityState(): that sends the RPC a second time.
                         if (window != null)
                             window.signStateToggle.SetState((int)pending.Value);
+                        // A window opened after this point still reads the old state; the echo
+                        // watch refreshes it once the new one arrives.
+                        _awaitingEcho.Add(new AwaitingEcho(pending.Sign, pending.Entity, pending.World, pending.Value, now + EchoTimeoutSeconds));
 
                         float elapsedSeconds = now - pending.PlacementAt;
                         string elapsedText = elapsedSeconds.ToString("F2", CultureInfo.InvariantCulture);

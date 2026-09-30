@@ -152,9 +152,10 @@ then Always in turn:
 
 With the option at Off or Always, the sign window's toggle against the default:
 
-- Place an arrow and open its window immediately: the toggle may show Hover for
-  a moment, then switches to the default once the server confirms the sign,
-  followed by a `default … applied` line.
+- Place an arrow and open its window immediately: the toggle may show Hover when
+  the window opens, then switches to the default on its own a moment later,
+  without closing and reopening the window; the log shows a `default … applied`
+  line.
 - Place an arrow, open its window immediately and change the toggle before it
   switches: your choice is kept, and the log shows `default skipped at …: set
   in the sign window` instead of an applied line.
@@ -170,7 +171,10 @@ same entity to the confirmed ghost, so the mod checks every frame and sends
 exists and is still at Hover. The game's sign window reads the state only when
 it opens, so if it is open on that sign at the moment of the send, the mod sets
 the window's toggle to match — or, if the player already moved the toggle off
-Hover, sends nothing.
+Hover, sends nothing. A window opened after the send but before the server's
+new state reaches the client still reads Hover; the mod watches for that state
+for up to two seconds and, once it arrives, sets the toggle of a window still
+open on that sign, unless the player has moved the toggle off Hover.
 
 **Result, 2026-09-30 (CK 1.3.0.4, singleplayer, macOS/CrossOver, dev build
 9999984):** the gap between placement and send was 0.12–0.18 s across nine
