@@ -157,6 +157,15 @@ nothing is sent (`default skipped` in the log).
 `unity/SignLabels/SignLabels_Steam.asset` — read them there, not from any
 line of prose, this one included.
 
+## Logo
+
+`unity/SignLabels/Editor/logo.png` follows the family style (parent
+`../CLAUDE.md`, "Logo / branding"): a teal wooden arrow signpost with brass
+brackets as the hero object, and as its gold gesture a small name tag hanging
+from the arrow on a chain, engraved with abstract lines rather than letters.
+Candidate 2 of four; the white and black renders, the prompt and the two
+unused black passes are in `sources/`.
+
 ## macOS / CrossOver
 
 Deployed through the fake-mod.io workaround (parent `../CLAUDE.md`). This
