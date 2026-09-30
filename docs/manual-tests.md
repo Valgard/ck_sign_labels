@@ -177,6 +177,17 @@ for up to two seconds and, once it arrives, sets the toggle of a window still
 open on that sign, unless the player has moved the toggle off Hover.
 
 **Result, 2026-09-30 (CK 1.3.0.4, singleplayer, macOS/CrossOver, dev build
-9999984):** the gap between placement and send was 0.12–0.18 s across nine
-placements, and each applied state held when checked a second later. The
-three sign-window checks above have not been run yet.
+9999984):** the gap between placement and send was 0.12–0.18 s across ten
+placements. Always ended at state 2 and Off at state 0 when checked a second
+later. Signs loaded from the save kept their stored state, with no `placement
+at` line at load.
+
+**Result, 2026-09-30 (same setup, default Always), sign-window checks:**
+
+- Open the window immediately: PASS — the toggle switched to Always on its own
+  a moment later, without reopening.
+- Open immediately and type a text: PASS — the sign ended at Always.
+- Open immediately and change the toggle before it switches: not run — the
+  gap of about 0.15 s is too short to click in, so this is not reproducible by
+  hand. That the code keeps a toggle already changed in the window is reviewed
+  in the code, not observed.
