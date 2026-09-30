@@ -30,14 +30,12 @@ namespace SignLabels
     /// <see cref="PlacementMatcher"/>; <see cref="LabeledSign.AnySpawned"/> feeds the matching
     /// consume, so a sign is picked out as the local player's own fresh placement, once.
     ///
-    /// <para>Matching a sign is not enough to send the RPC, though: a freshly placed sign is a
-    /// client-PREDICTED spawn — <c>GhostInstance.ghostId == 0</c> and
+    /// <para>Matching a sign is not enough to send the RPC: a freshly placed sign is a
+    /// client-predicted spawn — <c>GhostInstance.ghostId == 0</c> and
     /// <c>PredictedGhostSpawnRequest</c> present — and an RPC naming that entity cannot be resolved
-    /// by the server. NetCode later promotes the SAME entity to the real ghost (no second spawn), so
-    /// a matched sign is queued in <see cref="_pendingSends"/> and the RPC is sent from
-    /// <see cref="ProcessPendingSends"/> once the entity's ghost id is confirmed. Found and diagnosed
-    /// in Task 4's fix rounds 1-2 (2026-09-30): fix round 1 added the DIAG logging that showed the
-    /// same entity being promoted rather than replaced; this is fix round 2.</para>
+    /// by the server. NetCode later promotes the SAME entity to the real ghost rather than spawning a
+    /// second one, so a matched sign is queued in <see cref="_pendingSends"/> and the RPC is sent from
+    /// <see cref="ProcessPendingSends"/> once the entity's ghost id is confirmed.</para>
     /// </summary>
     public static class DefaultVisibility
     {
@@ -52,24 +50,27 @@ namespace SignLabels
         private static float _lastNow;
 
         // A sign matched to the local player's own placement, waiting for the server to confirm its
-        // ghost before the RPC can name it. Entity/World are captured at match time, not read live off
-        // Sign, so a pooled-and-reused component (mine + re-place) cannot make this entry silently
-        // start tracking someone else's sign — see ProcessPendingSends.
+        // ghost before the RPC can name it. Entity/World/Value are captured at match time, not read
+        // live off Sign or the handle later: a pooled-and-reused component (mine + re-place) cannot
+        // make this entry silently start tracking someone else's sign, and a mid-wait option change
+        // cannot retroactively change what this placement gets — see ProcessPendingSends.
         private readonly struct PendingSend
         {
             public readonly LabeledSign Sign;
             public readonly Entity Entity;
             public readonly World World;
+            public readonly Visibility Value;
             public readonly float PlacementAt;
             public readonly float ExpiresAt;
             public readonly int TileX;
             public readonly int TileZ;
 
-            public PendingSend(LabeledSign sign, Entity entity, World world, float placementAt, float expiresAt, int tileX, int tileZ)
+            public PendingSend(LabeledSign sign, Entity entity, World world, Visibility value, float placementAt, float expiresAt, int tileX, int tileZ)
             {
                 Sign = sign;
                 Entity = entity;
                 World = world;
+                Value = value;
                 PlacementAt = placementAt;
                 ExpiresAt = expiresAt;
                 TileX = tileX;
@@ -82,10 +83,9 @@ namespace SignLabels
 
         private static readonly List<PendingSend> _pendingSends = new();
 
-        // DIAG — temporary, added for Task 4 fix round 1 (default-visibility RPC not taking
-        // effect). One entry per applied default; RunPendingChecks logs each once it is due, then
-        // drops it. Remove this struct, the list, RunPendingChecks and its call site together once
-        // the investigation is closed.
+        // DIAG — temporary. One entry per applied default; RunPendingChecks logs each once it is due,
+        // then drops it. Remove this struct, the list, RunPendingChecks and its call site together
+        // once no longer needed.
         private readonly struct PendingCheck
         {
             public readonly LabeledSign Sign;
@@ -143,7 +143,13 @@ namespace SignLabels
 
             var player = Manager.main != null ? Manager.main.player : null;
             if (player == null)
+            {
+                // The local player is gone (main menu, between worlds). Nothing pending can still be
+                // waiting on a world or entity that belongs to this session, so drop it rather than
+                // let a stale World/Entity pair sit across a session boundary.
+                ClearPending();
                 return;
+            }
 
             if (!EntityUtility.TryGetComponentData<PlacementCD>(player.entity, player.world, out var placement))
                 return;
@@ -158,13 +164,21 @@ namespace SignLabels
                 Debug.Log($"[SignLabels] placement at ({tileX},{tileZ})");
         }
 
+        private static void ClearPending()
+        {
+            if (_pendingSends.Count > 0)
+                _pendingSends.Clear();
+            if (_pendingChecks.Count > 0)
+                _pendingChecks.Clear(); // DIAG
+        }
+
         /// <summary>
         /// Sends the deferred RPC for each pending sign once its ghost is confirmed: real ghost id
         /// (not 0) and no more <see cref="PredictedGhostSpawnRequest"/>. Drops an entry silently when
-        /// its sign or entity is no longer the one that was matched (despawned, or its pooled
-        /// component reused for something else), or when its state/text changed under it (someone
-        /// else already acted on it) — and drops it with a log line when the confirmation window
-        /// (<see cref="PendingSendTimeoutSeconds"/>) runs out first.
+        /// its sign is gone, its entity is no longer the one that was matched (despawned, or its
+        /// pooled component reused for something else), its world is no longer created, or its
+        /// state/text changed under it (someone else already acted on it) — and drops it with a log
+        /// line when the confirmation window (<see cref="PendingSendTimeoutSeconds"/>) runs out first.
         /// </summary>
         private static void ProcessPendingSends(float now)
         {
@@ -172,10 +186,16 @@ namespace SignLabels
             {
                 var pending = _pendingSends[i];
 
+                // Every condition here has to hold before an EntityManager call is safe: a destroyed
+                // sign, a reused pooled component, or a world that is no longer created (the session
+                // ended while this entry was waiting) must all stop the lookup before it runs, not
+                // only after — touching EntityManager on a disposed World is undefined behaviour with
+                // safety checks off, and throws every frame with them on.
                 bool signAlive = pending.Sign != null;
                 bool sameEntity = signAlive && pending.Sign.entity == pending.Entity;
-                bool entityExists = pending.World != null && pending.World.EntityManager.Exists(pending.Entity);
-                if (!signAlive || !sameEntity || !entityExists)
+                bool worldUsable = pending.World != null && pending.World.IsCreated;
+                bool entityExists = signAlive && sameEntity && worldUsable && pending.World.EntityManager.Exists(pending.Entity);
+                if (!entityExists)
                 {
                     _pendingSends.RemoveAt(i);
                     continue;
@@ -195,25 +215,28 @@ namespace SignLabels
                 if (confirmed)
                 {
                     var player = Manager.main != null ? Manager.main.player : null;
-                    if (player == null)
-                        continue; // retry next Tick rather than dropping — the timeout still applies.
+                    if (player != null)
+                    {
+                        player.playerCommandSystem.SetWorldLabelVisibility(pending.Entity, (int)pending.Value);
+                        float elapsedSeconds = now - pending.PlacementAt;
+                        string elapsedText = elapsedSeconds.ToString("F2", CultureInfo.InvariantCulture);
+                        Debug.Log($"[SignLabels] default {pending.Value} applied at ({pending.TileX},{pending.TileZ}) after {elapsedText} s");
 
-                    player.playerCommandSystem.SetWorldLabelVisibility(pending.Entity, (int)_handle.Value);
-                    float elapsedSeconds = now - pending.PlacementAt;
-                    string elapsedText = elapsedSeconds.ToString("F2", CultureInfo.InvariantCulture);
-                    Debug.Log($"[SignLabels] default {_handle.Value} applied at ({pending.TileX},{pending.TileZ}) after {elapsedText} s");
+                        // DIAG — entity identity + ghost id at the moment of the RPC, plus a recheck
+                        // ~1s later (see RunPendingChecks) to see whether the state actually stuck.
+                        Debug.Log(
+                            $"[SignLabels] DIAG applied entity={pending.Entity.Index}:{pending.Entity.Version} ghostId={ghostId} at ({pending.TileX},{pending.TileZ})"
+                        );
+                        _pendingChecks.Add(
+                            new PendingCheck(pending.Sign, pending.Entity, pending.World, pending.TileX, pending.TileZ, now + DiagRecheckDelaySeconds)
+                        );
 
-                    // DIAG — entity identity + ghost id at the moment of the RPC, plus a recheck ~1s
-                    // later (see RunPendingChecks) to see whether the state actually stuck.
-                    Debug.Log(
-                        $"[SignLabels] DIAG applied entity={pending.Entity.Index}:{pending.Entity.Version} ghostId={ghostId} at ({pending.TileX},{pending.TileZ})"
-                    );
-                    _pendingChecks.Add(
-                        new PendingCheck(pending.Sign, pending.Entity, pending.World, pending.TileX, pending.TileZ, now + DiagRecheckDelaySeconds)
-                    );
-
-                    _pendingSends.RemoveAt(i);
-                    continue;
+                        _pendingSends.RemoveAt(i);
+                        continue;
+                    }
+                    // else: no player right now (should not normally happen while the sign itself
+                    // still exists) — fall through to the timeout check below instead of retrying
+                    // forever.
                 }
 
                 if (now >= pending.ExpiresAt)
@@ -239,7 +262,8 @@ namespace SignLabels
 
                 bool signAlive = check.Sign != null;
                 bool sameEntity = signAlive && check.Sign.entity == check.EntityAtApply;
-                bool entityExists = check.WorldAtApply != null && check.WorldAtApply.EntityManager.Exists(check.EntityAtApply);
+                bool worldUsable = check.WorldAtApply != null && check.WorldAtApply.IsCreated;
+                bool entityExists = signAlive && worldUsable && check.WorldAtApply.EntityManager.Exists(check.EntityAtApply);
                 int stateNow = signAlive ? check.Sign.GetState() : -1;
                 int ghostIdNow = -1;
                 if (entityExists && check.WorldAtApply.EntityManager.HasComponent<GhostInstance>(check.EntityAtApply))
@@ -265,11 +289,14 @@ namespace SignLabels
             if (!_matcher.TryConsume(sign.TileX, sign.TileZ, _lastNow, out float elapsedSeconds))
                 return;
 
+            // Read the option now, at match time — not later at send time, when it may have changed.
+            Visibility value = _handle.Value;
+
             // elapsedSeconds is (match time - placement time); reconstructing the placement time here
             // lets the eventual "applied … after N s" line measure from the placement to the SEND,
             // not merely to this match, since the two can now be seconds apart.
             float placementAt = _lastNow - elapsedSeconds;
-            _pendingSends.Add(new PendingSend(sign, sign.entity, sign.world, placementAt, _lastNow + PendingSendTimeoutSeconds, sign.TileX, sign.TileZ));
+            _pendingSends.Add(new PendingSend(sign, sign.entity, sign.world, value, placementAt, _lastNow + PendingSendTimeoutSeconds, sign.TileX, sign.TileZ));
         }
     }
 }

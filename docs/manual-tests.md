@@ -34,16 +34,18 @@ session:
   their replicated `PlacementCD`.
 - `default <state> applied at (<x>,<z>) after <seconds> s` — the configured
   default was applied to the sign that spawned on that tile. `<state>` is the
-  current `Default visibility` option, `<seconds>` the time from the
-  `placement at` line above to the moment the RPC was actually sent, to two
-  decimals. **Not the same moment as the spawn**, and can trail it by a
-  perceptible fraction of a second: a freshly placed sign is a client-side
-  *predicted* spawn (no server-confirmed ghost id yet), so the mod holds the
-  RPC until the server confirms the same entity's ghost — see "Default
-  visibility" below. Absent when the option is Hover (a freshly placed sign
-  already starts there), when no `LabeledSign` spawns on that tile within the
-  matching window, or when the sign that spawns there already carries text (a
-  re-placed sign the game recognises as the old one).
+  `Default visibility` option as it read at the moment of the *match* (not
+  whatever it reads at the moment of the send, if it was changed in between),
+  `<seconds>` the time from the `placement at` line above to the moment the
+  RPC was actually sent, to two decimals. **Not the same moment as the
+  spawn**, and can trail it by a perceptible fraction of a second: a freshly
+  placed sign is a client-side *predicted* spawn (no server-confirmed ghost
+  id yet), so the mod holds the RPC until the server confirms the same
+  entity's ghost — see "Default visibility" below. Absent when the option is
+  Hover (a freshly placed sign already starts there), when no `LabeledSign`
+  spawns on that tile within the matching window, or when the sign that
+  spawns there already carries text (a re-placed sign the game recognises as
+  the old one).
 - `default not applied at (<x>,<z>): not confirmed by the server within 5 s`
   — a matched placement's entity never received a confirmed ghost id inside
   the 5-second window, so the mod gave up without sending. Not expected in a
@@ -159,12 +161,8 @@ the confirmed ghost rather than replacing it with a second spawn, but an RPC
 sent before that promotion would have named an entity the server cannot
 resolve. So the mod queues a matched placement and sends
 `SetWorldLabelVisibility` only once the entity's ghost id is confirmed,
-checked every frame; on a singleplayer/host session this is normally within
-the same tick or two (the `<seconds>` in the applied line stays at or near
-`0.00`), so the delay is not expected to be visible to a player watching the
-sign. If the ghost is never confirmed within 5 seconds — or the sign
-despawns, or its state/text changes first — the mod drops the wait instead
-of sending (see *Reading the log*). Found and fixed in Task 4's two fix
-rounds (2026-09-30): the first RPC attempt targeted the predicted entity
-directly and silently had no effect, even though the log showed it as
-applied.
+checked every frame. If the ghost is never confirmed within 5 seconds — or
+the sign despawns, or its state/text changes first — the mod drops the wait
+instead of sending (see *Reading the log*). How long the confirmation
+actually takes is not yet measured — read the `<seconds>` value off the
+applied line in the next in-game run and note it here.
