@@ -34,11 +34,23 @@ session:
   their replicated `PlacementCD`.
 - `default <state> applied at (<x>,<z>) after <seconds> s` — the configured
   default was applied to the sign that spawned on that tile. `<state>` is the
-  current `Default visibility` option, `<seconds>` the time since the
-  `placement at` line above, to two decimals. Absent when the option is Hover
-  (a freshly placed sign already starts there), when no `LabeledSign` spawns
-  on that tile within the matching window, or when the sign that spawns there
-  already carries text (a re-placed sign the game recognises as the old one).
+  current `Default visibility` option, `<seconds>` the time from the
+  `placement at` line above to the moment the RPC was actually sent, to two
+  decimals. **Not the same moment as the spawn**, and can trail it by a
+  perceptible fraction of a second: a freshly placed sign is a client-side
+  *predicted* spawn (no server-confirmed ghost id yet), so the mod holds the
+  RPC until the server confirms the same entity's ghost — see "Default
+  visibility" below. Absent when the option is Hover (a freshly placed sign
+  already starts there), when no `LabeledSign` spawns on that tile within the
+  matching window, or when the sign that spawns there already carries text (a
+  re-placed sign the game recognises as the old one).
+- `default not applied at (<x>,<z>): not confirmed by the server within 5 s`
+  — a matched placement's entity never received a confirmed ghost id inside
+  the 5-second window, so the mod gave up without sending. Not expected in a
+  healthy session — see "Default visibility" below. (A sign that despawns or
+  changes state/text before its ghost is confirmed is dropped from the wait
+  silently, with no line at all — that is the normal "someone else already
+  handled it" case, not a failure.)
 
 Anything else is a warning or an error. Each is logged once per session, never
 per frame:
@@ -126,15 +138,33 @@ In **Options → Mod Settings → Sign Labels**, the `Default visibility` option
 cycles Off / Hover / Always, default Hover. With it set to Off, then Hover,
 then Always in turn:
 
-- Place a new arrow: its label state matches the option right away, without
-  touching the sign's own toggle in its window. `Player.log` shows a
-  `placement at` line for the placement, followed by a `default … applied`
-  line naming the same tile and the matching state — except at Hover, where
-  no `default … applied` line appears, since a freshly placed sign already
-  starts there.
+- Place a new arrow: its label state matches the option shortly after
+  placing it, without touching the sign's own toggle in its window.
+  `Player.log` shows a `placement at` line for the placement, followed by a
+  `default … applied` line naming the same tile and the matching state —
+  except at Hover, where no `default … applied` line appears, since a
+  freshly placed sign already starts there.
 - A sign loaded from a save keeps its stored state regardless of the current
   option, with no `placement at` or `default … applied` line for it.
 - A sign streamed in by walking into its chunk keeps its state the same way.
 - Mine a sign and place a new one on the same tile right away: the new one gets
   the current default too, with its own `placement at` / `default … applied`
   pair.
+
+**A newly placed sign is a client-predicted spawn, and the default waits for
+the server to confirm it.** The entity the sign spawns as carries no real
+ghost id yet (`GhostInstance.ghostId == 0`) and still has
+`PredictedGhostSpawnRequest` — NetCode later promotes that *same* entity to
+the confirmed ghost rather than replacing it with a second spawn, but an RPC
+sent before that promotion would have named an entity the server cannot
+resolve. So the mod queues a matched placement and sends
+`SetWorldLabelVisibility` only once the entity's ghost id is confirmed,
+checked every frame; on a singleplayer/host session this is normally within
+the same tick or two (the `<seconds>` in the applied line stays at or near
+`0.00`), so the delay is not expected to be visible to a player watching the
+sign. If the ghost is never confirmed within 5 seconds — or the sign
+despawns, or its state/text changes first — the mod drops the wait instead
+of sending (see *Reading the log*). Found and fixed in Task 4's two fix
+rounds (2026-09-30): the first RPC attempt targeted the predicted entity
+directly and silently had no effect, even though the log showed it as
+applied.
