@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Interaction;
 using Pug.Conversion;
@@ -31,20 +32,32 @@ namespace SignLabels
             EnsureHasComponent<AlwaysDropOneCD>();
             EnsureHasBuffer<DescriptionBuffer>();
 
-            var graphical = info.prefabInfo?.GetGraphical();
-            if (!GraphicalPrefabEditor.EnsureEdited(graphical, target, out var failure))
+            // Everything below can throw on a future game update (a resolved-null prefab, a
+            // renamed/removed field JsonUtility no longer finds, ...). Nothing here has thrown on
+            // any build tested, but the promise this converter keeps is "the game must load", so a
+            // throw is caught rather than left to fail ECS initialisation: log once, add no trigger
+            // components, and this sign stays vanilla like any other verified edit failure.
+            try
             {
-                LogOnce(false, $"[SignLabels] failed to edit {target.RootName} prefab ({failure}); ids {IdsOn(graphical, target)} stay vanilla");
-                return;
+                var graphical = info.prefabInfo?.GetGraphical();
+                if (!GraphicalPrefabEditor.EnsureEdited(graphical, target, out var failure))
+                {
+                    LogOnce(false, $"[SignLabels] failed to edit {target.RootName} prefab ({failure}); ids {IdsOn(graphical, target)} stay vanilla");
+                    return;
+                }
+
+                EnsureHasBuffer<TriggerUseInteractionBuffer>();
+                EnsureHasComponent<LocalUseInteractionTriggerCD>(false);
+                AddComponentData(new LocalUseInteractionTriggerSubIndexCD { subIndex = 0 });
+                EnsureHasBuffer<TriggerExitInteractionBuffer>();
+                EnsureHasComponent<LocalExitInteractionTriggerCD>(false);
+
+                LogOnce(true, $"[SignLabels] edited {target.RootName} prefab for {IdsOn(graphical, target)}");
             }
-
-            EnsureHasBuffer<TriggerUseInteractionBuffer>();
-            EnsureHasComponent<LocalUseInteractionTriggerCD>(false);
-            AddComponentData(new LocalUseInteractionTriggerSubIndexCD { subIndex = 0 });
-            EnsureHasBuffer<TriggerExitInteractionBuffer>();
-            EnsureHasComponent<LocalExitInteractionTriggerCD>(false);
-
-            LogOnce(true, $"[SignLabels] edited {target.RootName} prefab for {IdsOn(graphical, target)}");
+            catch (Exception ex)
+            {
+                LogOnce(false, $"[SignLabels] {target.RootName} conversion threw ({ex}); {Describe(target.Id)} stays vanilla");
+            }
         }
 
         private static void LogOnce(bool success, string message)
