@@ -66,8 +66,9 @@ per frame:
 
 For each of the seven target signs:
 
-- Place it and interact with it: the game's sign window opens — the same one a
-  text sign opens.
+- Place it and target it: the sign shows the hover outline.
+- Interact with it: the game's sign window opens — the same one a text sign
+  opens.
 - Enter a text: the label shows while the sign is targeted (Hover). Switch the
   window's toggle to Always: the label shows without targeting. Switch it to
   Off: the label never shows.
@@ -81,7 +82,27 @@ Additionally, place the arrow and one warning sign in all four directions and
 interact with each: the window opens for every one of them, and the label sits
 above the sign it belongs to.
 
+Mine a labelled sign and place it again at once, so the game reuses a pooled
+instance: the new sign shows the outline, opens the window and shows its label
+like a fresh one.
+
+Place a vanilla text sign and label it: it still works as before, its hover
+outline included.
+
 `Player.log` holds five `[SignLabels] edited … prefab for …` lines as listed
 under *Reading the log*, and no `[SignLabels] failed` line.
 
-**Last run:** not yet run.
+**Result, 2026-09-30 (CK 1.3.0.3, singleplayer, macOS/CrossOver, dev build
+9999984):**
+
+Passed, every check. All seven signs rendered upright in their direction with
+their shadow, showed the hover outline, opened the game's sign window, showed
+the entered text and followed Hover, Always and Off; clearing the text removed
+the label. The arrow and a warning sign behaved correctly in all four
+directions. A mined sign placed again at once worked like a fresh one, and a
+vanilla text sign still worked, outline included. After save, quit and reload
+every text and visibility was as before. `Player.log` held exactly the five
+`edited` lines (warning signs, wooden signs, skull, brute, arrow, in that order)
+followed by `Mod initialized.`; no `failed` line and no `CompileFailed`. The only
+exception in the log was the game's own Steam-session `ObjectDisposedException`
+at quit, unrelated to the mod.
