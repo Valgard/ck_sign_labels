@@ -1,4 +1,6 @@
+using System.Collections.Generic; // DIAG — only needed for the pending-recheck list below.
 using ModSettingsMenu.Settings;
+using Unity.Entities; // DIAG — only needed for the pending-recheck list below (Entity, World).
 using UnityEngine;
 
 namespace SignLabels
@@ -38,6 +40,36 @@ namespace SignLabels
         // close enough given the several-second matching window.
         private static float _lastNow;
 
+        // DIAG — temporary, added for Task 4 fix round 1 (default-visibility RPC not taking
+        // effect). One entry per applied default; RunPendingChecks logs each once it is due, then
+        // drops it. Remove this struct, the list, RunPendingChecks and its call site together once
+        // the investigation is closed.
+        private readonly struct PendingCheck
+        {
+            public readonly LabeledSign Sign;
+            public readonly Entity EntityAtApply;
+            public readonly World WorldAtApply;
+            public readonly int TileX;
+            public readonly int TileZ;
+            public readonly float DueAt;
+
+            public PendingCheck(LabeledSign sign, Entity entityAtApply, World worldAtApply, int tileX, int tileZ, float dueAt)
+            {
+                Sign = sign;
+                EntityAtApply = entityAtApply;
+                WorldAtApply = worldAtApply;
+                TileX = tileX;
+                TileZ = tileZ;
+                DueAt = dueAt;
+            }
+        }
+
+        // DIAG
+        private const float DiagRecheckDelaySeconds = 1f;
+
+        // DIAG
+        private static readonly List<PendingCheck> _pendingChecks = new();
+
         /// <summary>Called once from <see cref="SignLabelsMod.Init"/>, after the Choice is built.</summary>
         public static void Bind(SettingHandle<Visibility> handle)
         {
@@ -64,6 +96,8 @@ namespace SignLabels
         {
             _lastNow = now;
 
+            RunPendingChecks(now); // DIAG
+
             var player = Manager.main != null ? Manager.main.player : null;
             if (player == null)
                 return;
@@ -79,6 +113,29 @@ namespace SignLabels
 
             if (_matcher.Observe(startTick, tileX, tileZ, now))
                 Debug.Log($"[SignLabels] placement at ({tileX},{tileZ})");
+        }
+
+        // DIAG — timestamp-based, not per-frame logging: this walks the (normally empty) pending
+        // list every Tick, but only logs an entry once its DueAt has passed, then removes it.
+        private static void RunPendingChecks(float now)
+        {
+            for (int i = _pendingChecks.Count - 1; i >= 0; i--)
+            {
+                var check = _pendingChecks[i];
+                if (now < check.DueAt)
+                    continue;
+                _pendingChecks.RemoveAt(i);
+
+                bool signAlive = check.Sign != null;
+                bool sameEntity = signAlive && check.Sign.entity == check.EntityAtApply;
+                bool entityExists = check.WorldAtApply != null && check.WorldAtApply.EntityManager.Exists(check.EntityAtApply);
+                int stateNow = signAlive ? check.Sign.GetState() : -1;
+
+                Debug.Log(
+                    $"[SignLabels] DIAG recheck at ({check.TileX},{check.TileZ}) entity={check.EntityAtApply.Index}:{check.EntityAtApply.Version} "
+                        + $"signAlive={signAlive} sameEntity={sameEntity} entityExists={entityExists} stateNow={stateNow}"
+                );
+            }
         }
 
         private static void OnSignSpawned(LabeledSign sign)
@@ -100,6 +157,11 @@ namespace SignLabels
 
             player.playerCommandSystem.SetWorldLabelVisibility(sign.entity, (int)_handle.Value);
             Debug.Log($"[SignLabels] default {_handle.Value} applied at ({sign.TileX},{sign.TileZ}) after {elapsedSeconds:F2} s");
+
+            // DIAG — entity identity at the moment of the RPC, plus a recheck ~1s later (see
+            // RunPendingChecks) to see whether the same entity is still there and what its state is.
+            Debug.Log($"[SignLabels] DIAG applied entity={sign.entity.Index}:{sign.entity.Version} at ({sign.TileX},{sign.TileZ})");
+            _pendingChecks.Add(new PendingCheck(sign, sign.entity, sign.world, sign.TileX, sign.TileZ, _lastNow + DiagRecheckDelaySeconds));
         }
     }
 }
