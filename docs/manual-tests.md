@@ -191,3 +191,41 @@ at` line at load.
   gap of about 0.15 s is too short to click in, so this is not reproducible by
   hand. That the code keeps a toggle already changed in the window is reviewed
   in the code, not observed.
+
+## Dedicated server and multiplayer
+
+Against a dedicated server with the mod installed on both sides:
+
+- The server log holds the five `edited … prefab for …` lines as listed under
+  *Reading the log*, then `Mod initialized.`, and no `failed` line.
+- A client with the mod joins without a mod warning.
+- Labelling a sign and switching its toggle works as in singleplayer.
+- The default visibility applies to newly placed signs, and a window opened
+  immediately switches its toggle on its own, as under *Default visibility*.
+- Mining a sign set to Always drops exactly one item.
+- Painting the Arrow Sign keeps its colour and its label.
+- Disconnecting and rejoining keeps every text and visibility state.
+- With a second client: the default applies only to signs the placing player
+  placed, and the other player sees the labels and states.
+
+Over a server the client's `default … applied` line trails the placement by
+more than in singleplayer, since the confirmation is a network round trip. A
+`placement at` line with no `applied` line after it comes from placing
+something other than a sign — the placement record changes for any placed
+object — and is expected.
+
+**Result, 2026-09-30 (CK 1.3.0.4, local dedicated server in the same
+CrossOver bottle, world "Test", one client, dev build 9999984):**
+
+- Server log: PASS — exactly five `edited` lines, all five graphical prefabs,
+  then `Mod initialized.`; no `failed` line and no exception.
+- Joining, labelling and toggling, default Always on new signs including the
+  open window's toggle, mining a sign at Always (one item), painting the Arrow
+  Sign, and disconnect plus rejoin: PASS.
+- Client log: `default Always applied … after` 0.31–0.35 s, against
+  0.12–0.18 s in singleplayer.
+- Second client: not run yet — open.
+
+More Labels 2.1.1 was loaded (`Successfully compiled NameChests`) during every
+run on 2026-09-30, the singleplayer ones included, with its hover option at its
+default; no interference was observed. Only that default option is covered.
