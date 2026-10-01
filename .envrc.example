@@ -74,12 +74,12 @@ export CK_GAME_VERSION="1.3.0.4 1.3.0.3"
 # here, because a copy written into a generated repo can never be corrected and
 # the set belongs to a channel somebody else administers. Filling this in is part
 # of writing the post.
-export CK_DISCORD_TAGS=""
+export CK_DISCORD_TAGS="Decoration|Tweaks"
 
 # The mod's thread in #available-mods, once it has one. Empty means no thread
 # yet, so the ck-discord-post skill creates a post; set means a new version is
 # announced as a comment there. Filled in after the first post, not by hand.
-export CK_DISCORD_THREAD=""
+export CK_DISCORD_THREAD="https://discord.com/channels/851842678340845600/1083718088526139443/threads/1555011119679152198"
 
 # Images and clips for the post, beyond the logo — PIPE-separated, in the order
 # they should appear. A relative path becomes an attachment, an http(s) URL
