@@ -89,8 +89,9 @@ text is whatever you type into it; it is not translated.
 
 ## Build (developer)
 
-See `CLAUDE.md` for the build and deploy procedure, and `docs/manual-tests.md`
-for the in-game verification checklist.
+See `CLAUDE.md` for the build and deploy procedure, `docs/manual-tests.md`
+for the in-game verification checklist, and `docs/roadmap.md` for what is
+planned but not built yet.
 
 ## License
 
