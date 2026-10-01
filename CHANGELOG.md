@@ -2,7 +2,7 @@
 
 All notable changes to this mod are documented here.
 
-## [1.0.0] - Unreleased
+## [1.0.0] - 2026-10-01
 
 Initial release: seven signs that had no vanilla label now open the game's
 own sign window.
