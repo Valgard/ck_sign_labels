@@ -11,8 +11,11 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d83df2ae64ce1e94f9c006b9d326bf02, type: 3}
   m_Name: SignLabels_modio
-  m_EditorClassIdentifier:
-  modId: 0
+  m_EditorClassIdentifier: 
+  modId: 6416996
   modSettings: {fileID: 11400000, guid: 0c043c14432c405f971688c85cb9d3fc, type: 2}
   logo: {fileID: 0}
-  summary:
+  title: 
+  summary: 
+  visible: 1
+  tags: []
