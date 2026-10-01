@@ -12,8 +12,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef61ecb41356dbc4db1133ad6be0ebf9, type: 3}
   m_Name: SignLabels_Steam
   m_EditorClassIdentifier: 
-  fileId: 0
-  modOwner: 
+  fileId: 3811066629
+  modOwner: 76561197970776512
   modName: SignLabels
-  selectedPath: 
-  tags: []
+  selectedPath: /Users/valgard/Library/Caches/CoreKeeperMods/SignLabels
+  tags:
+  - 1.3.0
+  - Quality of Life
+  - Client
+  - Server
+  - Script
