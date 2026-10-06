@@ -33,6 +33,8 @@ UserSettings/
 # Superpowers process artifacts — plans and brainstorming scratch, slop once
 # the work is implemented. docs/specs/ and docs/adrs/ stay tracked.
 docs/superpowers/
+# Superpowers subagent-run workspace (ledger, briefs, reports) — never committed
+/.superpowers/
 
 # LocalizationGenerator output (regenerated each build from localization/localization.yaml)
 unity/SignLabels/Localization/Generated/
